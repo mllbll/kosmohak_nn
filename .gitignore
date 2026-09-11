@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+/doc-1789140655/
+/doc-1789140655/Расчетный модуль/
+
+# Go
+bin/
+tmp/
+*.exe
+*.test
+*.out
+vendor/
