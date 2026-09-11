@@ -10,7 +10,7 @@ import (
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
 
-func (c *Client) WalkSnapshots(ctx context.Context, sc model.Scenario, fn func(model.Snapshot) error) error {
+func (c *pythonClient) WalkSnapshots(ctx context.Context, sc model.Scenario, fn func(model.Snapshot) error) error {
 	path, cleanup, err := writeTempScenario(sc)
 	if err != nil {
 		return err

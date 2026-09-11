@@ -16,15 +16,12 @@ func (s *service) Create(ctx context.Context, req model.CreateProjectRequest) (m
 		return model.CreateProjectResponse{}, err
 	}
 
-	id := req.Scenario.Meta.ID
-	if id == "" {
-		id = uuid.NewString()
-	}
+	id := uuid.NewString()
 
 	project := model.Project{
 		ID:        id,
-		Base:      req.Scenario,
-		Effective: req.Scenario,
+		Base:      model.CloneScenario(req.Scenario),
+		Effective: model.CloneScenario(req.Scenario),
 	}
 
 	if err := s.projectRepository.Create(ctx, project); err != nil {

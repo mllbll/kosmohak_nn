@@ -32,6 +32,22 @@ type PatchProjectResponse struct {
 	Project Project
 }
 
+type ResetProjectRequest struct {
+	ProjectID string
+}
+
+type ResetProjectResponse struct {
+	Project Project
+}
+
+type CopyProjectRequest struct {
+	ProjectID string
+}
+
+type CopyProjectResponse struct {
+	Project Project
+}
+
 // Patch частичное обновление из интерфейса
 type Patch struct {
 	LaunchStage    *int             `json:"launch_stage"`

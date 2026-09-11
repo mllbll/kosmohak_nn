@@ -14,7 +14,7 @@ import (
 type diContainer struct {
 	cfg config.Config
 
-	geometryClient *geometry.Client
+	geometryClient geometry.Client
 
 	projectRepository repository.ProjectRepository
 	runRepository     repository.RunRepository
@@ -27,7 +27,7 @@ func NewDiContainer(cfg config.Config) *diContainer {
 	return &diContainer{cfg: cfg}
 }
 
-func (d *diContainer) GeometryClient() *geometry.Client {
+func (d *diContainer) GeometryClient() geometry.Client {
 	if d.geometryClient == nil {
 		d.geometryClient = geometry.NewClient(d.cfg.PythonBin, d.cfg.RunnerScript)
 	}

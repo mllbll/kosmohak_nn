@@ -39,11 +39,14 @@ python3 python/runner.py data/01_full_constellation.json 0
 | POST | `/api/projects` |
 | GET | `/api/projects/{id}` |
 | PATCH | `/api/projects/{id}` |
+| POST | `/api/projects/{id}/reset` |
+| POST | `/api/projects/{id}/copy` |
 | POST | `/api/projects/{id}/runs` |
 | GET | `/api/runs/{id}` |
 | GET | `/api/runs/{id}/metrics` |
 | GET | `/api/runs/{id}/snapshot?t_s=&client_id=` |
 | GET | `/api/runs/{id}/export` |
+| POST | `/api/runs/{id}/what-if` |
 | POST | `/api/compare` |
 
 ```bash

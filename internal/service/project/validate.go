@@ -26,14 +26,15 @@ func ValidateScenario(sc model.Scenario) error {
 }
 
 func ApplyPatch(sc model.Scenario, p model.Patch) (model.Scenario, error) {
+	sc = model.CloneScenario(sc)
 	if p.LaunchStage != nil {
 		sc.Design.LaunchStage = *p.LaunchStage
 	}
 	if p.Failures != nil {
-		sc.Failures = *p.Failures
+		sc.Failures = append([]model.Failure{}, *p.Failures...)
 	}
 	if p.GatewayOutages != nil {
-		sc.GatewayOutages = *p.GatewayOutages
+		sc.GatewayOutages = append([]model.GatewayOutage{}, *p.GatewayOutages...)
 	}
 	if len(p.Planes) > 0 {
 		idx := map[string]int{}
@@ -53,5 +54,37 @@ func ApplyPatch(sc model.Scenario, p model.Patch) (model.Scenario, error) {
 			}
 		}
 	}
+	if err := validateOutages(sc); err != nil {
+		return model.Scenario{}, err
+	}
 	return sc, ValidateScenario(sc)
+}
+
+func validateOutages(sc model.Scenario) error {
+	sats := map[string]struct{}{}
+	for _, sat := range sc.Design.Satellites {
+		sats[sat.ID] = struct{}{}
+	}
+	gws := map[string]struct{}{}
+	for _, id := range sc.GatewayIDs() {
+		gws[id] = struct{}{}
+	}
+	horizon := float64(sc.Environment.HorizonS)
+	for i, f := range sc.Failures {
+		if _, ok := sats[f.SatelliteID]; !ok {
+			return fmt.Errorf("%w: failures[%d].satellite_id: unknown id %q", model.ErrInvalidArgument, i, f.SatelliteID)
+		}
+		if !(0 <= f.StartS && f.StartS < f.EndS && f.EndS <= horizon) {
+			return fmt.Errorf("%w: failures[%d]: interval must be inside [0, horizon_s]", model.ErrInvalidArgument, i)
+		}
+	}
+	for i, o := range sc.GatewayOutages {
+		if _, ok := gws[o.GatewayID]; !ok {
+			return fmt.Errorf("%w: gateway_outages[%d].gateway_id: unknown id %q", model.ErrInvalidArgument, i, o.GatewayID)
+		}
+		if !(0 <= o.StartS && o.StartS < o.EndS && o.EndS <= horizon) {
+			return fmt.Errorf("%w: gateway_outages[%d]: interval must be inside [0, horizon_s]", model.ErrInvalidArgument, i)
+		}
+	}
+	return nil
 }

@@ -10,12 +10,12 @@ var _ def.ProjectService = (*service)(nil)
 
 type service struct {
 	projectRepository repository.ProjectRepository
-	geometryClient    *geometry.Client
+	geometryClient    geometry.Client
 }
 
 func NewService(
 	projectRepository repository.ProjectRepository,
-	geometryClient *geometry.Client,
+	geometryClient geometry.Client,
 ) *service {
 	return &service{
 		projectRepository: projectRepository,

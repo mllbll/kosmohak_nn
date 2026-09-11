@@ -1,7 +1,6 @@
 package geometry
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,7 +10,7 @@ import (
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
 
-func (c *Client) Snapshot(ctx context.Context, sc model.Scenario, t float64) (model.Snapshot, error) {
+func (c *pythonClient) Snapshot(ctx context.Context, sc model.Scenario, t float64) (model.Snapshot, error) {
 	path, cleanup, err := writeTempScenario(sc)
 	if err != nil {
 		return model.Snapshot{}, err
@@ -46,11 +45,4 @@ func writeTempScenario(sc model.Scenario) (string, func(), error) {
 		return "", nil, err
 	}
 	return f.Name(), func() { os.Remove(f.Name()) }, nil
-}
-
-func wrapExec(err error) error {
-	if ee, ok := err.(*exec.ExitError); ok {
-		return fmt.Errorf("%w: %s\n%s", model.ErrGeometryFailed, ee.Error(), bytes.TrimSpace(ee.Stderr))
-	}
-	return fmt.Errorf("%w: %v", model.ErrGeometryFailed, err)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	apiresp "github.com/mllbll/kosmohak_nn/internal/api"
 	projectV1 "github.com/mllbll/kosmohak_nn/internal/api/project/v1"
 	runV1 "github.com/mllbll/kosmohak_nn/internal/api/run/v1"
@@ -35,6 +36,13 @@ func (a *App) initHTTPServer(cfg config.Config) error {
 	runAPI := runV1.NewAPI(a.diContainer.RunService())
 
 	r := chi.NewRouter()
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CORSOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(5 * time.Minute))
@@ -46,12 +54,15 @@ func (a *App) initHTTPServer(cfg config.Config) error {
 	r.Post("/api/projects", projectAPI.Create)
 	r.Get("/api/projects/{id}", projectAPI.Get)
 	r.Patch("/api/projects/{id}", projectAPI.Patch)
+	r.Post("/api/projects/{id}/reset", projectAPI.Reset)
+	r.Post("/api/projects/{id}/copy", projectAPI.Copy)
 	r.Post("/api/projects/{id}/runs", runAPI.Create)
 
 	r.Get("/api/runs/{id}", runAPI.Get)
 	r.Get("/api/runs/{id}/metrics", runAPI.GetMetrics)
 	r.Get("/api/runs/{id}/snapshot", runAPI.GetSnapshot)
 	r.Get("/api/runs/{id}/export", runAPI.Export)
+	r.Post("/api/runs/{id}/what-if", runAPI.WhatIf)
 	r.Post("/api/compare", runAPI.Compare)
 
 	a.httpServer = &http.Server{

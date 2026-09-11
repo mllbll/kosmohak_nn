@@ -105,3 +105,13 @@ func (s Scenario) IsGatewayOutaged(gatewayID string, t float64) bool {
 	}
 	return false
 }
+
+func CloneScenario(sc Scenario) Scenario {
+	out := sc
+	out.Design.Planes = append([]Plane{}, sc.Design.Planes...)
+	out.Design.Satellites = append([]Satellite{}, sc.Design.Satellites...)
+	out.GroundSites = append([]GroundSite{}, sc.GroundSites...)
+	out.Failures = append([]Failure{}, sc.Failures...)
+	out.GatewayOutages = append([]GatewayOutage{}, sc.GatewayOutages...)
+	return out
+}

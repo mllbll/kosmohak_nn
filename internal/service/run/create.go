@@ -14,16 +14,32 @@ func (s *service) Create(ctx context.Context, req model.CreateRunRequest) (model
 		return model.CreateRunResponse{}, err
 	}
 
-	sc := project.Effective
+	run, err := s.execute(ctx, project.ID, project.Effective)
+	if err != nil {
+		return model.CreateRunResponse{}, err
+	}
+
+	if err := s.runRepository.Create(ctx, run); err != nil {
+		return model.CreateRunResponse{}, err
+	}
+
+	return model.CreateRunResponse{
+		RunID:     run.ID,
+		ProjectID: run.ProjectID,
+		Metrics:   run.Metrics,
+	}, nil
+}
+
+func (s *service) execute(ctx context.Context, projectID string, sc model.Scenario) (model.Run, error) {
 	clients := sc.ClientIDs()
 	if len(clients) == 0 {
-		return model.CreateRunResponse{}, fmt.Errorf("%w: no clients in scenario", model.ErrInvalidArgument)
+		return model.Run{}, fmt.Errorf("%w: no clients in scenario", model.ErrInvalidArgument)
 	}
 
 	var routes []model.RouteRecord
 	visible := map[int]map[string]bool{}
 
-	err = s.geometryClient.WalkSnapshots(ctx, sc, func(snap model.Snapshot) error {
+	err := s.geometryClient.WalkSnapshots(ctx, sc, func(snap model.Snapshot) error {
 		t := int(snap.TS)
 		visible[t] = map[string]bool{}
 		for _, clientID := range clients {
@@ -44,27 +60,17 @@ func (s *service) Create(ctx context.Context, req model.CreateRunRequest) (model
 		return nil
 	})
 	if err != nil {
-		return model.CreateRunResponse{}, err
+		return model.Run{}, err
 	}
 
 	metrics := Aggregate(sc, routes, visible)
-	run := model.Run{
+	return model.Run{
 		ID:                uuid.NewString(),
-		ProjectID:         project.ID,
-		EffectiveScenario: sc,
+		ProjectID:         projectID,
+		EffectiveScenario: model.CloneScenario(sc),
 		Routes:            routes,
 		Metrics:           metrics,
 		Summary:           buildSummary(metrics, sc.Environment.TargetAvailability),
-	}
-
-	if err := s.runRepository.Create(ctx, run); err != nil {
-		return model.CreateRunResponse{}, err
-	}
-
-	return model.CreateRunResponse{
-		RunID:     run.ID,
-		ProjectID: run.ProjectID,
-		Metrics:   run.Metrics,
 	}, nil
 }
 

@@ -110,3 +110,21 @@ type ClientDiff struct {
 	MaxGapSB       int     `json:"max_gap_s_b"`
 	DeltaMaxGapS   int     `json:"delta_max_gap_s"`
 }
+
+type WhatIfRequest struct {
+	RunID       string   `json:"-"`
+	ClientID    string   `json:"client_id"`
+	TS          float64  `json:"t_s"`
+	SatelliteID string   `json:"satellite_id"`
+	StartS      *float64 `json:"start_s"`
+	EndS        *float64 `json:"end_s"`
+}
+
+type WhatIfResponse struct {
+	OriginalRunID     string              `json:"original_run_id"`
+	ProjectID         string              `json:"project_id"`
+	RunID             string              `json:"run_id"`
+	FailedSatelliteID string              `json:"failed_satellite_id"`
+	Metrics           []ClientMetrics     `json:"metrics"`
+	Compare           CompareRunsResponse `json:"compare"`
+}
