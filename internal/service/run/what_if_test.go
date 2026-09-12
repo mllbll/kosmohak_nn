@@ -54,6 +54,10 @@ func (s *ServiceSuite) TestWhatIfSuccess() {
 	s.Require().Equal("S01", res.FailedSatelliteID)
 	s.Require().Equal(original.ID, res.Compare.RunAID)
 	s.Require().Equal(res.RunID, res.Compare.RunBID)
+	s.Require().NotEmpty(res.Analysis.Clients)
+	s.Require().NotEmpty(res.Analysis.Summary)
+	s.Require().NotEmpty(res.Analysis.Mitigations)
+	s.Require().Equal("S01", res.Analysis.FailedSatelliteID)
 }
 
 func (s *ServiceSuite) TestWhatIfFromPathSuccess() {
@@ -92,6 +96,73 @@ func (s *ServiceSuite) TestWhatIfFromPathSuccess() {
 
 	s.Require().NoError(err)
 	s.Require().Equal("S01", res.FailedSatelliteID)
+	s.Require().NotEmpty(res.Analysis.Summary)
+}
+
+func (s *ServiceSuite) TestWhatIfGatewaySuccess() {
+	var (
+		projectID  = gofakeit.UUID()
+		original   = testRun(projectID)
+		snap       = testSnapshot()
+		createdRun model.Run
+
+		whatIfRequest = model.WhatIfRequest{
+			RunID:     original.ID,
+			GatewayID: "G_MUR",
+			TS:        0,
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, mock.Anything).Return(
+		func(_ context.Context, id string) (model.Run, error) {
+			if id == original.ID {
+				return original, nil
+			}
+			return createdRun, nil
+		},
+	)
+	s.geometryClient.On("Snapshot", s.ctx, mock.Anything, float64(0)).Return(model.Snapshot{}, nil)
+	s.projectRepository.On("Create", s.ctx, mock.MatchedBy(func(project model.Project) bool {
+		return len(project.Effective.GatewayOutages) == 1 &&
+			project.Effective.GatewayOutages[0].GatewayID == "G_MUR"
+	})).Return(nil)
+	s.geometryClient.On("WalkSnapshots", s.ctx, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		fn := args.Get(2).(func(model.Snapshot) error)
+		_ = fn(snap)
+	}).Return(nil)
+	s.runRepository.On("Create", s.ctx, mock.Anything).Run(func(args mock.Arguments) {
+		createdRun = args.Get(1).(model.Run)
+	}).Return(nil)
+
+	res, err := s.service.WhatIf(s.ctx, whatIfRequest)
+
+	s.Require().NoError(err)
+	s.Require().Equal("G_MUR", res.FailedGatewayID)
+	s.Require().Empty(res.FailedSatelliteID)
+	s.Require().Equal("G_MUR", res.Analysis.FailedGatewayID)
+	s.Require().NotEmpty(res.Analysis.Summary)
+}
+
+func (s *ServiceSuite) TestWhatIfUnknownGateway() {
+	var (
+		projectID = gofakeit.UUID()
+		original  = testRun(projectID)
+
+		whatIfRequest = model.WhatIfRequest{
+			RunID:     original.ID,
+			GatewayID: "UNKNOWN",
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, original.ID).Return(original, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+	s.projectRepository.AssertNotCalled(s.T(), "Create")
+
+	res, err := s.service.WhatIf(s.ctx, whatIfRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Empty(res)
 }
 
 func (s *ServiceSuite) TestWhatIfNotFoundError() {

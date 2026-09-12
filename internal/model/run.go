@@ -154,6 +154,7 @@ type WhatIfRequest struct {
 	ClientID    string   `json:"client_id"`
 	TS          float64  `json:"t_s"`
 	SatelliteID string   `json:"satellite_id"`
+	GatewayID   string   `json:"gateway_id"`
 	StartS      *float64 `json:"start_s"`
 	EndS        *float64 `json:"end_s"`
 }
@@ -162,7 +163,56 @@ type WhatIfResponse struct {
 	OriginalRunID     string              `json:"original_run_id"`
 	ProjectID         string              `json:"project_id"`
 	RunID             string              `json:"run_id"`
-	FailedSatelliteID string              `json:"failed_satellite_id"`
+	FailedSatelliteID string              `json:"failed_satellite_id,omitempty"`
+	FailedGatewayID   string              `json:"failed_gateway_id,omitempty"`
 	Metrics           []ClientMetrics     `json:"metrics"`
 	Compare           CompareRunsResponse `json:"compare"`
+	Analysis          ResilienceAnalysis  `json:"analysis"`
+}
+
+type ResilienceAnalysis struct {
+	FailedSatelliteID string             `json:"failed_satellite_id,omitempty"`
+	FailedGatewayID   string             `json:"failed_gateway_id,omitempty"`
+	Interval          FailureInterval    `json:"interval"`
+	AffectedClients   []string           `json:"affected_clients"`
+	PreservedClients  []string           `json:"preserved_clients"`
+	Clients           []ResilienceClient `json:"clients"`
+	GapReasons        GapReasonDiff      `json:"gap_reasons"`
+	Vulnerabilities   []string           `json:"vulnerabilities"`
+	Mitigations       []string           `json:"mitigations"`
+	Summary           string             `json:"summary"`
+}
+
+type FailureInterval struct {
+	StartS float64 `json:"start_s"`
+	EndS   float64 `json:"end_s"`
+}
+
+type ResilienceClient struct {
+	ClientID          string    `json:"client_id"`
+	Affected          bool      `json:"affected"`
+	RoutePreserved    bool      `json:"route_preserved"`
+	PathBefore        []string  `json:"path_before"`
+	PathAfter         []string  `json:"path_after"`
+	ReasonBefore      GapReason `json:"reason_before,omitempty"`
+	ReasonAfter       GapReason `json:"reason_after,omitempty"`
+	PathRatioBefore   float64   `json:"path_ratio_before"`
+	PathRatioAfter    float64   `json:"path_ratio_after"`
+	DeltaPathRatio    float64   `json:"delta_path_ratio"`
+	MaxGapBefore      int       `json:"max_gap_s_before"`
+	MaxGapAfter       int       `json:"max_gap_s_after"`
+	DeltaMaxGapS      int       `json:"delta_max_gap_s"`
+	MeetsTargetBefore bool      `json:"meets_target_before"`
+	MeetsTargetAfter  bool      `json:"meets_target_after"`
+	LostSteps         int       `json:"lost_steps"`
+	WindowSteps       int       `json:"window_steps"`
+	WindowPathBefore  int       `json:"window_path_before"`
+	WindowPathAfter   int       `json:"window_path_after"`
+	DominantGapReason GapReason `json:"dominant_gap_reason,omitempty"`
+}
+
+type GapReasonDiff struct {
+	Before map[string]int `json:"before"`
+	After  map[string]int `json:"after"`
+	Delta  map[string]int `json:"delta"`
 }

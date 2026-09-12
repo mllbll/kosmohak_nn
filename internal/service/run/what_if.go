@@ -14,7 +14,7 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 		return model.WhatIfResponse{}, err
 	}
 
-	satID, err := resolveFailedSatellite(original, req)
+	satID, gwID, err := resolveFailure(original, req)
 	if err != nil {
 		return model.WhatIfResponse{}, err
 	}
@@ -33,11 +33,20 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 
 	base := model.CloneScenario(original.EffectiveScenario)
 	effective := model.CloneScenario(original.EffectiveScenario)
-	effective.Failures = append(append([]model.Failure{}, effective.Failures...), model.Failure{
-		SatelliteID: satID,
-		StartS:      startS,
-		EndS:        endS,
-	})
+	if satID != "" {
+		effective.Failures = append(append([]model.Failure{}, effective.Failures...), model.Failure{
+			SatelliteID: satID,
+			StartS:      startS,
+			EndS:        endS,
+		})
+	}
+	if gwID != "" {
+		effective.GatewayOutages = append(append([]model.GatewayOutage{}, effective.GatewayOutages...), model.GatewayOutage{
+			GatewayID: gwID,
+			StartS:    startS,
+			EndS:      endS,
+		})
+	}
 
 	if _, err := s.geometryClient.Snapshot(ctx, effective, 0); err != nil {
 		return model.WhatIfResponse{}, err
@@ -73,19 +82,40 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 		ProjectID:         project.ID,
 		RunID:             newRun.ID,
 		FailedSatelliteID: satID,
+		FailedGatewayID:   gwID,
 		Metrics:           newRun.Metrics,
 		Compare:           cmp,
+		Analysis:          buildResilienceAnalysis(original, newRun, satID, gwID, startS, endS),
 	}, nil
 }
 
-func resolveFailedSatellite(run model.Run, req model.WhatIfRequest) (string, error) {
+func resolveFailure(run model.Run, req model.WhatIfRequest) (string, string, error) {
+	var satID, gwID string
+
 	if req.SatelliteID != "" {
 		if !hasSatellite(run.EffectiveScenario, req.SatelliteID) {
-			return "", fmt.Errorf("%w: unknown satellite %q", model.ErrInvalidArgument, req.SatelliteID)
+			return "", "", fmt.Errorf("%w: unknown satellite %q", model.ErrInvalidArgument, req.SatelliteID)
 		}
-		return req.SatelliteID, nil
+		satID = req.SatelliteID
+	}
+	if req.GatewayID != "" {
+		if !hasGateway(run.EffectiveScenario, req.GatewayID) {
+			return "", "", fmt.Errorf("%w: unknown gateway %q", model.ErrInvalidArgument, req.GatewayID)
+		}
+		gwID = req.GatewayID
+	}
+	if satID != "" || gwID != "" {
+		return satID, gwID, nil
 	}
 
+	satID, err := resolveFailedSatellite(run, req)
+	if err != nil {
+		return "", "", err
+	}
+	return satID, "", nil
+}
+
+func resolveFailedSatellite(run model.Run, req model.WhatIfRequest) (string, error) {
 	clientID := req.ClientID
 	if clientID == "" {
 		ids := run.EffectiveScenario.ClientIDs()
@@ -112,6 +142,15 @@ func resolveFailedSatellite(run model.Run, req model.WhatIfRequest) (string, err
 func hasSatellite(sc model.Scenario, id string) bool {
 	for _, sat := range sc.Design.Satellites {
 		if sat.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasGateway(sc model.Scenario, id string) bool {
+	for _, g := range sc.GroundSites {
+		if g.Role == "gateway" && g.ID == id {
 			return true
 		}
 	}
