@@ -11,9 +11,12 @@ func Aggregate(sc model.Scenario, routes []model.RouteRecord, visible map[int]ma
 		return nil
 	}
 
-	byClient := map[string][]model.RouteRecord{}
-	for _, r := range routes {
-		byClient[r.ClientID] = append(byClient[r.ClientID], r)
+	byClient := map[string]map[int]model.RouteRecord{}
+	for _, rec := range routes {
+		if byClient[rec.ClientID] == nil {
+			byClient[rec.ClientID] = map[int]model.RouteRecord{}
+		}
+		byClient[rec.ClientID][rec.TS] = rec
 	}
 
 	out := make([]model.ClientMetrics, 0, len(sc.ClientIDs()))
@@ -24,19 +27,20 @@ func Aggregate(sc model.Scenario, routes []model.RouteRecord, visible map[int]ma
 		hopsSum := 0
 		streak := 0
 		maxStreak := 0
-		for _, rec := range recs {
-			if visible[rec.TS][id] {
+		for _, t := range grid {
+			if visible[t][id] {
 				vis++
 			}
-			if len(rec.Path) > 0 {
+			rec, has := recs[t]
+			if has && len(rec.Path) > 0 {
 				ok++
 				hopsSum += rec.Hops
 				streak = 0
-			} else {
-				streak++
-				if streak > maxStreak {
-					maxStreak = streak
-				}
+				continue
+			}
+			streak++
+			if streak > maxStreak {
+				maxStreak = streak
 			}
 		}
 		mean := 0.0

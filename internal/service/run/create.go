@@ -55,7 +55,7 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 				Reason:   res.Reason,
 				Hops:     res.Hops,
 			})
-			visible[t][clientID] = hasUplink(snap, clientID)
+			visible[t][clientID] = clientVisible(sc, snap, clientID)
 		}
 		return nil
 	})
@@ -72,15 +72,6 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 		Metrics:           metrics,
 		Summary:           buildSummary(metrics, sc.Environment.TargetAvailability),
 	}, nil
-}
-
-func hasUplink(snap model.Snapshot, clientID string) bool {
-	for _, e := range snap.Edges {
-		if e.A == clientID || e.B == clientID {
-			return true
-		}
-	}
-	return false
 }
 
 func buildSummary(metrics []model.ClientMetrics, target float64) string {
