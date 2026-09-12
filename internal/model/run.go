@@ -90,25 +90,63 @@ type ExportRoute struct {
 }
 
 type CompareRunsRequest struct {
-	RunAID string `json:"run_a"`
-	RunBID string `json:"run_b"`
+	RunAID string   `json:"run_a"`
+	RunBID string   `json:"run_b"`
+	RunIDs []string `json:"run_ids"`
 }
 
 type CompareRunsResponse struct {
-	RunAID  string         `json:"run_a_id"`
-	RunBID  string         `json:"run_b_id"`
-	Config  map[string]any `json:"config_diff"`
-	Clients []ClientDiff   `json:"clients"`
+	RunAID         string                `json:"run_a_id,omitempty"`
+	RunBID         string                `json:"run_b_id,omitempty"`
+	Config         map[string]any        `json:"config_diff,omitempty"`
+	Variants       []CompareVariant      `json:"variants"`
+	Clients        []ClientDiff          `json:"clients"`
+	Recommendation CompareRecommendation `json:"recommendation"`
+}
+
+type CompareVariant struct {
+	RunID                string          `json:"run_id"`
+	ProjectID            string          `json:"project_id"`
+	Title                string          `json:"title"`
+	LaunchStage          int             `json:"launch_stage"`
+	Planes               []Plane         `json:"planes"`
+	ClientsMeetingTarget int             `json:"clients_meeting_target"`
+	ClientsTotal         int             `json:"clients_total"`
+	MeanPathRatio        float64         `json:"mean_path_ratio"`
+	MeanMaxGapS          float64         `json:"mean_max_gap_s"`
+	Metrics              []ClientMetrics `json:"metrics"`
+	Summary              string          `json:"summary,omitempty"`
+}
+
+type CompareRecommendation struct {
+	RunID  string `json:"run_id,omitempty"`
+	Better string `json:"better"`
+	Reason string `json:"reason"`
 }
 
 type ClientDiff struct {
-	ClientID       string  `json:"client_id"`
-	PathRatioA     float64 `json:"path_ratio_a"`
-	PathRatioB     float64 `json:"path_ratio_b"`
-	DeltaPathRatio float64 `json:"delta_path_ratio"`
-	MaxGapSA       int     `json:"max_gap_s_a"`
-	MaxGapSB       int     `json:"max_gap_s_b"`
-	DeltaMaxGapS   int     `json:"delta_max_gap_s"`
+	ClientID         string            `json:"client_id"`
+	Better           string            `json:"better"`
+	PathRatioA       float64           `json:"path_ratio_a,omitempty"`
+	PathRatioB       float64           `json:"path_ratio_b,omitempty"`
+	DeltaPathRatio   float64           `json:"delta_path_ratio,omitempty"`
+	VisibilityRatioA float64           `json:"visibility_ratio_a,omitempty"`
+	VisibilityRatioB float64           `json:"visibility_ratio_b,omitempty"`
+	MaxGapSA         int               `json:"max_gap_s_a,omitempty"`
+	MaxGapSB         int               `json:"max_gap_s_b,omitempty"`
+	DeltaMaxGapS     int               `json:"delta_max_gap_s,omitempty"`
+	MeetsTargetA     bool              `json:"meets_target_a,omitempty"`
+	MeetsTargetB     bool              `json:"meets_target_b,omitempty"`
+	ByRun            []ClientRunMetric `json:"by_run"`
+}
+
+type ClientRunMetric struct {
+	RunID           string  `json:"run_id"`
+	PathRatio       float64 `json:"path_ratio"`
+	VisibilityRatio float64 `json:"visibility_ratio"`
+	MaxGapS         int     `json:"max_gap_s"`
+	MeanHops        float64 `json:"mean_hops"`
+	MeetsTarget     bool    `json:"meets_target"`
 }
 
 type WhatIfRequest struct {

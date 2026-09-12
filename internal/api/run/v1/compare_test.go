@@ -69,6 +69,19 @@ func (s *APISuite) TestCompareInvalidArgument() {
 	s.runService.AssertNotCalled(s.T(), "Compare")
 }
 
+func (s *APISuite) TestCompareInvalidArgumentEmpty() {
+	var (
+		compareRunsRequest = model.CompareRunsRequest{}
+	)
+
+	s.runService.On("Compare", mock.Anything, compareRunsRequest).Return(model.CompareRunsResponse{}, model.ErrInvalidArgument)
+
+	rec, req := s.newRequest(http.MethodPost, "/api/compare", "", compareRunsRequest)
+	s.api.Compare(rec, req)
+
+	s.Require().Equal(http.StatusBadRequest, rec.Code)
+}
+
 func (s *APISuite) TestCompareError() {
 	var (
 		serviceErr = gofakeit.Error()

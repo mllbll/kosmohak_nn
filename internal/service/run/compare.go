@@ -2,26 +2,253 @@ package run
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
 
 func (s *service) Compare(ctx context.Context, req model.CompareRunsRequest) (model.CompareRunsResponse, error) {
-	a, err := s.runRepository.Get(ctx, req.RunAID)
-	if err != nil {
-		return model.CompareRunsResponse{}, err
-	}
-	b, err := s.runRepository.Get(ctx, req.RunBID)
+	ids, err := compareRunIDs(req)
 	if err != nil {
 		return model.CompareRunsResponse{}, err
 	}
 
-	return model.CompareRunsResponse{
-		RunAID:  a.ID,
-		RunBID:  b.ID,
-		Config:  configDiff(a.EffectiveScenario, b.EffectiveScenario),
-		Clients: clientDiffs(a.Metrics, b.Metrics),
-	}, nil
+	runs := make([]model.Run, 0, len(ids))
+	for _, id := range ids {
+		run, err := s.runRepository.Get(ctx, id)
+		if err != nil {
+			return model.CompareRunsResponse{}, err
+		}
+		runs = append(runs, run)
+	}
+
+	return buildCompare(runs), nil
+}
+
+func compareRunIDs(req model.CompareRunsRequest) ([]string, error) {
+	if len(req.RunIDs) >= 2 {
+		return req.RunIDs, nil
+	}
+	if req.RunAID != "" && req.RunBID != "" {
+		return []string{req.RunAID, req.RunBID}, nil
+	}
+	return nil, fmt.Errorf("%w: two or more run ids required", model.ErrInvalidArgument)
+}
+
+func buildCompare(runs []model.Run) model.CompareRunsResponse {
+	variants := make([]model.CompareVariant, 0, len(runs))
+	for _, run := range runs {
+		variants = append(variants, toCompareVariant(run))
+	}
+
+	resp := model.CompareRunsResponse{
+		Variants:       variants,
+		Clients:        clientDiffs(runs),
+		Recommendation: recommend(variants),
+	}
+
+	if len(runs) == 2 {
+		resp.RunAID = runs[0].ID
+		resp.RunBID = runs[1].ID
+		resp.Config = configDiff(runs[0].EffectiveScenario, runs[1].EffectiveScenario)
+		if resp.Recommendation.RunID == runs[0].ID {
+			resp.Recommendation.Better = "a"
+		} else if resp.Recommendation.RunID == runs[1].ID {
+			resp.Recommendation.Better = "b"
+		} else {
+			resp.Recommendation.Better = "tie"
+		}
+	}
+
+	return resp
+}
+
+func toCompareVariant(run model.Run) model.CompareVariant {
+	meeting := 0
+	pathSum := 0.0
+	gapSum := 0.0
+	for _, m := range run.Metrics {
+		if m.MeetsTarget {
+			meeting++
+		}
+		pathSum += m.PathRatio
+		gapSum += float64(m.MaxGapS)
+	}
+	n := float64(len(run.Metrics))
+	meanPath := 0.0
+	meanGap := 0.0
+	if n > 0 {
+		meanPath = pathSum / n
+		meanGap = gapSum / n
+	}
+
+	return model.CompareVariant{
+		RunID:                run.ID,
+		ProjectID:            run.ProjectID,
+		Title:                run.EffectiveScenario.Meta.Title,
+		LaunchStage:          run.EffectiveScenario.Design.LaunchStage,
+		Planes:               append([]model.Plane{}, run.EffectiveScenario.Design.Planes...),
+		ClientsMeetingTarget: meeting,
+		ClientsTotal:         len(run.Metrics),
+		MeanPathRatio:        meanPath,
+		MeanMaxGapS:          meanGap,
+		Metrics:              append([]model.ClientMetrics{}, run.Metrics...),
+		Summary:              run.Summary,
+	}
+}
+
+func clientDiffs(runs []model.Run) []model.ClientDiff {
+	indexes := make([]map[string]model.ClientMetrics, 0, len(runs))
+	for _, run := range runs {
+		idx := map[string]model.ClientMetrics{}
+		for _, m := range run.Metrics {
+			idx[m.ClientID] = m
+		}
+		indexes = append(indexes, idx)
+	}
+
+	out := make([]model.ClientDiff, 0)
+	seen := map[string]struct{}{}
+	for _, run := range runs {
+		for _, m := range run.Metrics {
+			if _, ok := seen[m.ClientID]; ok {
+				continue
+			}
+			seen[m.ClientID] = struct{}{}
+
+			byRun := make([]model.ClientRunMetric, 0, len(runs))
+			for i, r := range runs {
+				cm := indexes[i][m.ClientID]
+				byRun = append(byRun, model.ClientRunMetric{
+					RunID:           r.ID,
+					PathRatio:       cm.PathRatio,
+					VisibilityRatio: cm.VisibilityRatio,
+					MaxGapS:         cm.MaxGapS,
+					MeanHops:        cm.MeanHops,
+					MeetsTarget:     cm.MeetsTarget,
+				})
+			}
+
+			diff := model.ClientDiff{
+				ClientID: m.ClientID,
+				Better:   betterClient(byRun),
+				ByRun:    byRun,
+			}
+			if len(byRun) == 2 {
+				diff.PathRatioA = byRun[0].PathRatio
+				diff.PathRatioB = byRun[1].PathRatio
+				diff.DeltaPathRatio = byRun[1].PathRatio - byRun[0].PathRatio
+				diff.VisibilityRatioA = byRun[0].VisibilityRatio
+				diff.VisibilityRatioB = byRun[1].VisibilityRatio
+				diff.MaxGapSA = byRun[0].MaxGapS
+				diff.MaxGapSB = byRun[1].MaxGapS
+				diff.DeltaMaxGapS = byRun[1].MaxGapS - byRun[0].MaxGapS
+				diff.MeetsTargetA = byRun[0].MeetsTarget
+				diff.MeetsTargetB = byRun[1].MeetsTarget
+				switch diff.Better {
+				case byRun[0].RunID:
+					diff.Better = "a"
+				case byRun[1].RunID:
+					diff.Better = "b"
+				}
+			}
+			out = append(out, diff)
+		}
+	}
+	return out
+}
+
+func betterClient(metrics []model.ClientRunMetric) string {
+	if len(metrics) == 0 {
+		return "tie"
+	}
+
+	best := 0
+	for i := 1; i < len(metrics); i++ {
+		if cmpClientMetric(metrics[i], metrics[best]) > 0 {
+			best = i
+		}
+	}
+	for i, m := range metrics {
+		if i != best && cmpClientMetric(m, metrics[best]) == 0 {
+			return "tie"
+		}
+	}
+	return metrics[best].RunID
+}
+
+func cmpClientMetric(a, b model.ClientRunMetric) int {
+	switch {
+	case a.MeetsTarget != b.MeetsTarget:
+		if a.MeetsTarget {
+			return 1
+		}
+		return -1
+	case a.PathRatio > b.PathRatio:
+		return 1
+	case a.PathRatio < b.PathRatio:
+		return -1
+	case a.MaxGapS < b.MaxGapS:
+		return 1
+	case a.MaxGapS > b.MaxGapS:
+		return -1
+	default:
+		return 0
+	}
+}
+
+func recommend(variants []model.CompareVariant) model.CompareRecommendation {
+	if len(variants) == 0 {
+		return model.CompareRecommendation{Better: "tie", Reason: "Нет вариантов для сравнения"}
+	}
+
+	best := 0
+	for i := 1; i < len(variants); i++ {
+		if cmpVariant(variants[i], variants[best]) > 0 {
+			best = i
+		}
+	}
+	for i, v := range variants {
+		if i != best && cmpVariant(v, variants[best]) == 0 {
+			return model.CompareRecommendation{
+				Better: "tie",
+				Reason: "Ничья: варианты дают одинаковую доступность для заданных пунктов",
+			}
+		}
+	}
+
+	v := variants[best]
+	reason := fmt.Sprintf(
+		"Рекомендуется «%s» (этап %d): %d из %d пунктов достигают цели, средняя доступность пути %.0f%%",
+		v.Title,
+		v.LaunchStage,
+		v.ClientsMeetingTarget,
+		v.ClientsTotal,
+		v.MeanPathRatio*100,
+	)
+	return model.CompareRecommendation{
+		RunID:  v.RunID,
+		Reason: reason,
+	}
+}
+
+func cmpVariant(a, b model.CompareVariant) int {
+	switch {
+	case a.ClientsMeetingTarget > b.ClientsMeetingTarget:
+		return 1
+	case a.ClientsMeetingTarget < b.ClientsMeetingTarget:
+		return -1
+	case a.MeanPathRatio > b.MeanPathRatio:
+		return 1
+	case a.MeanPathRatio < b.MeanPathRatio:
+		return -1
+	case a.MeanMaxGapS < b.MeanMaxGapS:
+		return 1
+	case a.MeanMaxGapS > b.MeanMaxGapS:
+		return -1
+	default:
+		return 0
+	}
 }
 
 func configDiff(a, b model.Scenario) map[string]any {
@@ -58,25 +285,4 @@ func configDiff(a, b model.Scenario) map[string]any {
 		diff["planes"] = planes
 	}
 	return diff
-}
-
-func clientDiffs(a, b []model.ClientMetrics) []model.ClientDiff {
-	bm := map[string]model.ClientMetrics{}
-	for _, m := range b {
-		bm[m.ClientID] = m
-	}
-	out := make([]model.ClientDiff, 0, len(a))
-	for _, ma := range a {
-		mb := bm[ma.ClientID]
-		out = append(out, model.ClientDiff{
-			ClientID:       ma.ClientID,
-			PathRatioA:     ma.PathRatio,
-			PathRatioB:     mb.PathRatio,
-			DeltaPathRatio: mb.PathRatio - ma.PathRatio,
-			MaxGapSA:       ma.MaxGapS,
-			MaxGapSB:       mb.MaxGapS,
-			DeltaMaxGapS:   mb.MaxGapS - ma.MaxGapS,
-		})
-	}
-	return out
 }
