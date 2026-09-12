@@ -4,7 +4,7 @@
 
 Целевой ориентир ТЗ: доступность сквозного пути **client → спутники → gateway ≥ 90%** для каждого наземного пункта. Наземные пункты не ретранслируют трафик.
 
-Контракт HTTP для фронтенда: [docs/frontend.md](docs/frontend.md).
+Контракт HTTP для фронтенда: [docs/frontend.md](docs/frontend.md). Деплой Docker: [docs/docker.md](docs/docker.md).
 
 ## Слои
 
@@ -39,6 +39,29 @@ make test
 ```
 
 Переменные: `HTTP_ADDR`, `PYTHON_BIN`, `RUNNER_SCRIPT`, `CORS_ORIGINS`.
+
+## Docker
+
+Полная инструкция: **[docs/docker.md](docs/docker.md)**.
+
+На любой машине с Docker:
+
+```bash
+docker compose up --build
+```
+
+```bash
+docker compose up --build
+```
+
+Образ сам собирает Go-бинарник и кладёт рядом Python + NumPy + `geometry.py`. API: `http://localhost:8080`. Остановка: `Ctrl+C`, затем `docker compose down`.
+
+Только образ, без compose:
+
+```bash
+docker build -t kosmohak-nn .
+docker run --rm -p 8080:8080 kosmohak-nn
+```
 
 ## Демонстрационный сценарий (ТЗ)
 
