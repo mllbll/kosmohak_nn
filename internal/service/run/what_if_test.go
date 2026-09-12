@@ -58,6 +58,7 @@ func (s *ServiceSuite) TestWhatIfSuccess() {
 	s.Require().NotEmpty(res.Analysis.Summary)
 	s.Require().NotEmpty(res.Analysis.Mitigations)
 	s.Require().Equal("S01", res.Analysis.FailedSatelliteID)
+	s.Require().Contains(res.Compare.Recommendation.Limitations[0], "искусственным отказом")
 }
 
 func (s *ServiceSuite) TestWhatIfFromPathSuccess() {

@@ -38,6 +38,7 @@ func justifyRecommendation(
 	}
 
 	rec.RunID = winner.RunID
+	rec.Better = winner.RunID
 	rec.Reason = fmt.Sprintf(
 		"Рекомендуется %s: %d из %d пунктов достигают цели %.0f%%, средняя доступность пути %.0f%%",
 		variantLabel(winner),

@@ -24,7 +24,9 @@ func isValidationError(stderr []byte) bool {
 	text := string(stderr)
 	return strings.Contains(text, "ValueError:") ||
 		strings.Contains(text, "JSONDecodeError:") ||
-		strings.Contains(text, "json.decoder.JSONDecodeError:")
+		strings.Contains(text, "json.decoder.JSONDecodeError:") ||
+		strings.Contains(text, "TypeError:") ||
+		strings.Contains(text, "KeyError:")
 }
 
 func extractPythonError(stderr []byte) string {
@@ -40,6 +42,8 @@ func extractPythonError(stderr []byte) string {
 			"ValueError: ",
 			"json.decoder.JSONDecodeError: ",
 			"JSONDecodeError: ",
+			"TypeError: ",
+			"KeyError: ",
 		} {
 			if strings.HasPrefix(line, prefix) {
 				return strings.TrimSpace(strings.TrimPrefix(line, prefix))

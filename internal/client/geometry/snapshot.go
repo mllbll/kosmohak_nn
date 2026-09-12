@@ -35,7 +35,7 @@ func writeTempScenario(sc model.Scenario) (string, func(), error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if err := json.NewEncoder(f).Encode(sc); err != nil {
+	if err := json.NewEncoder(f).Encode(model.CloneScenario(sc)); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return "", nil, err

@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -10,7 +12,17 @@ import (
 )
 
 func (a *api) GetSnapshot(w http.ResponseWriter, r *http.Request) {
-	t, _ := strconv.ParseFloat(r.URL.Query().Get("t_s"), 64)
+	raw := r.URL.Query().Get("t_s")
+	t := 0.0
+	if raw != "" {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			apiresp.WriteError(w, fmt.Errorf("%w: t_s must be a finite number", model.ErrInvalidArgument))
+			return
+		}
+		t = parsed
+	}
+
 	resp, err := a.runService.GetSnapshot(r.Context(), model.GetSnapshotRequest{
 		RunID:    chi.URLParam(r, "id"),
 		TS:       t,

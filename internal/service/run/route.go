@@ -17,16 +17,22 @@ func Route(sc model.Scenario, snap model.Snapshot, clientID string) model.RouteR
 	algo := routeAlgorithm()
 
 	clientHasUplink := false
-	gatewayHasDownlink := false
-	for _, e := range snap.Edges {
-		if e.A == clientID || e.B == clientID {
+	for _, nb := range g.adj[clientID] {
+		if allowedHop(clientID, nb, g) {
 			clientHasUplink = true
+			break
 		}
-		if _, ok := g.gateways[e.A]; ok {
-			gatewayHasDownlink = true
+	}
+	gatewayHasDownlink := false
+	for gw := range g.gateways {
+		for _, nb := range g.adj[gw] {
+			if _, ok := g.sats[nb]; ok {
+				gatewayHasDownlink = true
+				break
+			}
 		}
-		if _, ok := g.gateways[e.B]; ok {
-			gatewayHasDownlink = true
+		if gatewayHasDownlink {
+			break
 		}
 	}
 
@@ -178,7 +184,10 @@ func enumerateAtHops(start string, g routeGraph, targetHops, limit int) [][]stri
 				continue
 			}
 			used[nb] = true
-			walk(nb, append(path, nb))
+			next := make([]string, len(path)+1)
+			copy(next, path)
+			next[len(path)] = nb
+			walk(nb, next)
 			used[nb] = false
 		}
 	}

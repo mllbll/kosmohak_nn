@@ -76,6 +76,9 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 	if err != nil {
 		return model.WhatIfResponse{}, err
 	}
+	cmp.Recommendation.Limitations = append([]string{
+		"run_b — прогон с искусственным отказом, а не альтернативная конструкция группировки",
+	}, cmp.Recommendation.Limitations...)
 
 	return model.WhatIfResponse{
 		OriginalRunID:     original.ID,

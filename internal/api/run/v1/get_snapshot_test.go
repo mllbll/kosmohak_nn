@@ -81,3 +81,15 @@ func (s *APISuite) TestGetSnapshotError() {
 
 	s.Require().Equal(http.StatusInternalServerError, rec.Code)
 }
+
+func (s *APISuite) TestGetSnapshotInvalidTS() {
+	var (
+		runID = gofakeit.UUID()
+	)
+
+	rec, req := s.newRequest(http.MethodGet, "/api/runs/"+runID+"/snapshot?t_s=abc", runID, nil)
+	s.api.GetSnapshot(rec, req)
+
+	s.Require().Equal(http.StatusBadRequest, rec.Code)
+	s.runService.AssertNotCalled(s.T(), "GetSnapshot")
+}

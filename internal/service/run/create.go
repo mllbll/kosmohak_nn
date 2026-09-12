@@ -36,17 +36,30 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 		return model.Run{}, fmt.Errorf("%w: no clients in scenario", model.ErrInvalidArgument)
 	}
 
+	grid := sc.TimeGrid()
 	var routes []model.RouteRecord
 	visible := map[int]map[string]bool{}
+	step := 0
 
 	err := s.geometryClient.WalkSnapshots(ctx, sc, func(snap model.Snapshot) error {
+		if step >= len(grid) {
+			return fmt.Errorf("%w: extra snapshot at t_s=%g", model.ErrGeometryFailed, snap.TS)
+		}
 		t := int(snap.TS)
+		if t != grid[step] {
+			return fmt.Errorf("%w: snapshot t_s=%d, expected %d", model.ErrGeometryFailed, t, grid[step])
+		}
+		step++
+
 		visible[t] = map[string]bool{}
 		for _, clientID := range clients {
 			res := Route(sc, snap, clientID)
 			path := res.Path
 			if path == nil {
 				path = []string{}
+			}
+			if len(path) > 0 && res.Hops != len(path)-1 {
+				return fmt.Errorf("%w: hops %d != path length for %s at t_s=%d", model.ErrGeometryFailed, res.Hops, clientID, t)
 			}
 			routes = append(routes, model.RouteRecord{
 				TS:       t,
@@ -61,6 +74,9 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 	})
 	if err != nil {
 		return model.Run{}, err
+	}
+	if step != len(grid) {
+		return model.Run{}, fmt.Errorf("%w: geometry returned %d snapshots, expected %d", model.ErrGeometryFailed, step, len(grid))
 	}
 
 	metrics := Aggregate(sc, routes, visible)

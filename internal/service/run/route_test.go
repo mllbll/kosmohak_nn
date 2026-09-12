@@ -1,12 +1,10 @@
 package run
 
 import (
-	"testing"
-
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
 
-func TestRouteFindsMinHopPath(t *testing.T) {
+func (s *ServiceSuite) TestRouteFindsMinHopPath() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
 		TS: 0,
@@ -22,21 +20,14 @@ func TestRouteFindsMinHopPath(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if len(res.Path) != 4 {
-		t.Fatalf("expected path of 4 nodes, got %v", res.Path)
-	}
-	if res.Path[0] != "C65" || res.Path[len(res.Path)-1] != "G_MUR" {
-		t.Fatalf("unexpected path %v", res.Path)
-	}
-	if res.Hops != 3 {
-		t.Fatalf("expected 3 hops, got %d", res.Hops)
-	}
-	if res.Algorithm.Name != "bfs_min_hops" {
-		t.Fatalf("algorithm %s", res.Algorithm.Name)
-	}
+	s.Require().Len(res.Path, 4)
+	s.Require().Equal("C65", res.Path[0])
+	s.Require().Equal("G_MUR", res.Path[len(res.Path)-1])
+	s.Require().Equal(3, res.Hops)
+	s.Require().Equal("bfs_min_hops", res.Algorithm.Name)
 }
 
-func TestRouteCollectsAlternateMinHopPaths(t *testing.T) {
+func (s *ServiceSuite) TestRouteCollectsAlternateMinHopPaths() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
 		TS: 0,
@@ -53,18 +44,12 @@ func TestRouteCollectsAlternateMinHopPaths(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if res.Hops != 2 {
-		t.Fatalf("min hops %d path %v", res.Hops, res.Path)
-	}
-	if len(res.Alternatives) == 0 {
-		t.Fatal("expected alternate min-hop path")
-	}
-	if res.Alternatives[0][1] == res.Path[1] {
-		t.Fatalf("alternate should use another satellite, path=%v alt=%v", res.Path, res.Alternatives[0])
-	}
+	s.Require().Equal(2, res.Hops)
+	s.Require().NotEmpty(res.Alternatives)
+	s.Require().NotEqual(res.Path[1], res.Alternatives[0][1])
 }
 
-func TestRouteIncludesBackupLongerPath(t *testing.T) {
+func (s *ServiceSuite) TestRouteIncludesBackupLongerPath() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
 		TS: 0,
@@ -81,21 +66,17 @@ func TestRouteIncludesBackupLongerPath(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if got := []string{"C65", "S1", "G_MUR"}; len(res.Path) != 3 || res.Path[1] != "S1" {
-		t.Fatalf("primary %v want %v", res.Path, got)
-	}
+	s.Require().Equal([]string{"C65", "S1", "G_MUR"}, res.Path)
 	foundBackup := false
 	for _, alt := range res.Alternatives {
 		if len(alt) == 4 && alt[1] == "S1" && alt[2] == "S2" {
 			foundBackup = true
 		}
 	}
-	if !foundBackup {
-		t.Fatalf("expected +1 hop backup via S2, alts=%v", res.Alternatives)
-	}
+	s.Require().True(foundBackup, "expected +1 hop backup via S2, alts=%v", res.Alternatives)
 }
 
-func TestRouteNoVisibleSat(t *testing.T) {
+func (s *ServiceSuite) TestRouteNoVisibleSat() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
 		TS:         0,
@@ -104,15 +85,11 @@ func TestRouteNoVisibleSat(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if len(res.Path) != 0 {
-		t.Fatalf("expected empty path, got %v", res.Path)
-	}
-	if res.Reason != model.GapNoVisibleSat {
-		t.Fatalf("expected no_visible_sat, got %s", res.Reason)
-	}
+	s.Require().Empty(res.Path)
+	s.Require().Equal(model.GapNoVisibleSat, res.Reason)
 }
 
-func TestRouteISLPartition(t *testing.T) {
+func (s *ServiceSuite) TestRouteISLPartition() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
 		TS: 0,
@@ -127,12 +104,11 @@ func TestRouteISLPartition(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if res.Reason != model.GapISLPartition {
-		t.Fatalf("expected isl_partition, got %s path=%v", res.Reason, res.Path)
-	}
+	s.Require().Equal(model.GapISLPartition, res.Reason)
+	s.Require().Empty(res.Path)
 }
 
-func TestGroundDoesNotRelay(t *testing.T) {
+func (s *ServiceSuite) TestGroundDoesNotRelay() {
 	sc := sampleScenario()
 	sc.GroundSites = append(sc.GroundSites, model.GroundSite{ID: "C70", Role: "client"})
 	snap := model.Snapshot{
@@ -146,9 +122,8 @@ func TestGroundDoesNotRelay(t *testing.T) {
 	}
 
 	res := Route(sc, snap, "C65")
-	if len(res.Path) != 0 {
-		t.Fatalf("client must not relay, got %v", res.Path)
-	}
+	s.Require().Empty(res.Path)
+	s.Require().Equal(model.GapNoGatewayContact, res.Reason)
 }
 
 func sampleScenario() model.Scenario {

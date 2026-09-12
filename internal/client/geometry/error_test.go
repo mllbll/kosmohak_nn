@@ -27,4 +27,9 @@ ValueError: Invalid outage
 	if !errors.Is(err, model.ErrInvalidArgument) {
 		t.Fatalf("expected ErrInvalidArgument, got %v", err)
 	}
+
+	typeErr := wrapExec(&exec.ExitError{Stderr: []byte("TypeError: 'NoneType' object is not iterable\n")})
+	if !errors.Is(typeErr, model.ErrInvalidArgument) {
+		t.Fatalf("expected ErrInvalidArgument for TypeError, got %v", typeErr)
+	}
 }

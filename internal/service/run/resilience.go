@@ -387,6 +387,10 @@ func resilienceSummary(analysis model.ResilienceAnalysis, satID, gwID string) st
 			label, len(analysis.PreservedClients),
 		)
 	}
+	hint := ""
+	if len(analysis.Mitigations) > 0 {
+		hint = analysis.Mitigations[0]
+	}
 	return fmt.Sprintf(
 		"Отказ %s затрагивает %d из %d направлений (%v), маршруты сохранились у %v. %s",
 		label,
@@ -394,6 +398,6 @@ func resilienceSummary(analysis model.ResilienceAnalysis, satID, gwID string) st
 		len(analysis.AffectedClients)+len(analysis.PreservedClients),
 		analysis.AffectedClients,
 		analysis.PreservedClients,
-		analysis.Mitigations[0],
+		hint,
 	)
 }

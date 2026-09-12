@@ -150,16 +150,16 @@ type CompareRecommendation struct {
 type ClientDiff struct {
 	ClientID         string            `json:"client_id"`
 	Better           string            `json:"better"`
-	PathRatioA       float64           `json:"path_ratio_a,omitempty"`
-	PathRatioB       float64           `json:"path_ratio_b,omitempty"`
-	DeltaPathRatio   float64           `json:"delta_path_ratio,omitempty"`
-	VisibilityRatioA float64           `json:"visibility_ratio_a,omitempty"`
-	VisibilityRatioB float64           `json:"visibility_ratio_b,omitempty"`
-	MaxGapSA         int               `json:"max_gap_s_a,omitempty"`
-	MaxGapSB         int               `json:"max_gap_s_b,omitempty"`
-	DeltaMaxGapS     int               `json:"delta_max_gap_s,omitempty"`
-	MeetsTargetA     bool              `json:"meets_target_a,omitempty"`
-	MeetsTargetB     bool              `json:"meets_target_b,omitempty"`
+	PathRatioA       float64           `json:"path_ratio_a"`
+	PathRatioB       float64           `json:"path_ratio_b"`
+	DeltaPathRatio   float64           `json:"delta_path_ratio"`
+	VisibilityRatioA float64           `json:"visibility_ratio_a"`
+	VisibilityRatioB float64           `json:"visibility_ratio_b"`
+	MaxGapSA         int               `json:"max_gap_s_a"`
+	MaxGapSB         int               `json:"max_gap_s_b"`
+	DeltaMaxGapS     int               `json:"delta_max_gap_s"`
+	MeetsTargetA     bool              `json:"meets_target_a"`
+	MeetsTargetB     bool              `json:"meets_target_b"`
 	ByRun            []ClientRunMetric `json:"by_run"`
 }
 

@@ -2,6 +2,8 @@ package run
 
 import (
 	"context"
+	"fmt"
+	"math"
 
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
@@ -12,13 +14,20 @@ func (s *service) GetSnapshot(ctx context.Context, req model.GetSnapshotRequest)
 		return model.GetSnapshotResponse{}, err
 	}
 
+	horizon := float64(run.EffectiveScenario.Environment.HorizonS)
+	if math.IsNaN(req.TS) || math.IsInf(req.TS, 0) || req.TS < 0 || req.TS > horizon {
+		return model.GetSnapshotResponse{}, fmt.Errorf("%w: t_s must be within [0, horizon_s]", model.ErrInvalidArgument)
+	}
+
+	ids := run.EffectiveScenario.ClientIDs()
 	clientID := req.ClientID
 	if clientID == "" {
-		ids := run.EffectiveScenario.ClientIDs()
 		if len(ids) == 0 {
-			return model.GetSnapshotResponse{}, model.ErrInvalidArgument
+			return model.GetSnapshotResponse{}, fmt.Errorf("%w: client_id required", model.ErrInvalidArgument)
 		}
 		clientID = ids[0]
+	} else if !hasClient(ids, clientID) {
+		return model.GetSnapshotResponse{}, fmt.Errorf("%w: unknown client %q", model.ErrInvalidArgument, clientID)
 	}
 
 	snap, err := s.geometryClient.Snapshot(ctx, run.EffectiveScenario, req.TS)
@@ -33,6 +42,15 @@ func (s *service) GetSnapshot(ctx context.Context, req model.GetSnapshotRequest)
 		Route:        route,
 		NetworkDelta: networkDelta(run.EffectiveScenario, snap, prev, prevFound, route),
 	}, nil
+}
+
+func hasClient(ids []string, id string) bool {
+	for _, item := range ids {
+		if item == id {
+			return true
+		}
+	}
+	return false
 }
 
 func previousRoute(run model.Run, clientID string, ts float64) ([]string, bool) {

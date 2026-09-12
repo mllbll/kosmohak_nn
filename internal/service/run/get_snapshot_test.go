@@ -107,3 +107,46 @@ func (s *ServiceSuite) TestGetSnapshotGeometryError() {
 	s.Require().Equal(err, geomErr)
 	s.Require().Empty(res)
 }
+
+func (s *ServiceSuite) TestGetSnapshotUnknownClient() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+
+		getSnapshotRequest = model.GetSnapshotRequest{
+			RunID:    run.ID,
+			ClientID: "UNKNOWN",
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+
+	res, err := s.service.GetSnapshot(s.ctx, getSnapshotRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestGetSnapshotInvalidTime() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+
+		getSnapshotRequest = model.GetSnapshotRequest{
+			RunID:    run.ID,
+			TS:       99999,
+			ClientID: "C65",
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+
+	res, err := s.service.GetSnapshot(s.ctx, getSnapshotRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Empty(res)
+}

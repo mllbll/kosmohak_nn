@@ -1,6 +1,7 @@
 package run
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/brianvoe/gofakeit/v7"
@@ -53,6 +54,12 @@ func (s *ServiceSuite) TestCompareSuccess() {
 	s.Require().Contains(strings.Join(res.Recommendation.Advantages, "\n"), "C65")
 	s.Require().Contains(res.Recommendation.Conditions[0], "90")
 	s.Require().Contains(res.Recommendation.Conclusion, "этап 3")
+
+	raw, err := json.Marshal(res.Clients[0])
+	s.Require().NoError(err)
+	s.Require().Contains(string(raw), `"meets_target_a":true`)
+	s.Require().Contains(string(raw), `"meets_target_b":false`)
+	s.Require().Contains(string(raw), `"max_gap_s_a":0`)
 }
 
 func (s *ServiceSuite) TestCompareRunIDsSuccess() {
@@ -87,6 +94,7 @@ func (s *ServiceSuite) TestCompareRunIDsSuccess() {
 	s.Require().Len(res.Variants, 3)
 	s.Require().Equal(runA.ID, res.Recommendation.RunID)
 	s.Require().Equal(runA.ID, res.Clients[0].Better)
+	s.Require().Equal(runA.ID, res.Recommendation.Better)
 	s.Require().Len(res.Clients[0].ByRun, 3)
 }
 
