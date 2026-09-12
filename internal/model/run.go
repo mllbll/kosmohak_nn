@@ -19,9 +19,27 @@ type RouteRecord struct {
 }
 
 type RouteResult struct {
-	Path   []string  `json:"path"`
-	Reason GapReason `json:"reason,omitempty"`
-	Hops   int       `json:"hops,omitempty"`
+	Path         []string       `json:"path"`
+	Reason       GapReason      `json:"reason,omitempty"`
+	Hops         int            `json:"hops,omitempty"`
+	Alternatives [][]string     `json:"alternatives,omitempty"`
+	Algorithm    RouteAlgorithm `json:"algorithm"`
+}
+
+type RouteAlgorithm struct {
+	Name        string   `json:"name"`
+	Objective   string   `json:"objective"`
+	Constraints []string `json:"constraints"`
+	Rationale   string   `json:"rationale"`
+	MinHops     int      `json:"min_hops,omitempty"`
+}
+
+type NetworkDelta struct {
+	Changed            bool     `json:"changed"`
+	PreviousStillValid bool     `json:"previous_still_valid"`
+	PreviousPath       []string `json:"previous_path,omitempty"`
+	CurrentPath        []string `json:"current_path,omitempty"`
+	Explanation        string   `json:"explanation"`
 }
 
 type ClientMetrics struct {
@@ -67,8 +85,9 @@ type GetSnapshotRequest struct {
 }
 
 type GetSnapshotResponse struct {
-	Snapshot Snapshot    `json:"snapshot"`
-	Route    RouteResult `json:"route"`
+	Snapshot     Snapshot     `json:"snapshot"`
+	Route        RouteResult  `json:"route"`
+	NetworkDelta NetworkDelta `json:"network_delta"`
 }
 
 type ExportRunRequest struct {

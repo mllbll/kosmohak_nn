@@ -27,6 +27,45 @@ func (s *ServiceSuite) TestGetSnapshotSuccess() {
 	s.Require().NoError(err)
 	s.Require().Equal(snap, res.Snapshot)
 	s.Require().Equal([]string{"C65", "S01", "G_MUR"}, res.Route.Path)
+	s.Require().Equal("bfs_min_hops", res.Route.Algorithm.Name)
+	s.Require().NotEmpty(res.Route.Algorithm.Rationale)
+	s.Require().NotEmpty(res.NetworkDelta.Explanation)
+}
+
+func (s *ServiceSuite) TestGetSnapshotRebuildsBrokenPath() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+		snap      = model.Snapshot{
+			TS: 120,
+			Satellites: []model.SatState{
+				{ID: "S01", Active: true},
+				{ID: "S02", Active: true},
+			},
+			Edges: []model.Edge{
+				{A: "C65", B: "S02", DistanceKM: 100},
+				{A: "S02", B: "G_MUR", DistanceKM: 100},
+			},
+		}
+
+		getSnapshotRequest = model.GetSnapshotRequest{
+			RunID:    run.ID,
+			TS:       120,
+			ClientID: "C65",
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+	s.geometryClient.On("Snapshot", s.ctx, mock.Anything, float64(120)).Return(snap, nil)
+
+	res, err := s.service.GetSnapshot(s.ctx, getSnapshotRequest)
+
+	s.Require().NoError(err)
+	s.Require().Equal([]string{"C65", "S02", "G_MUR"}, res.Route.Path)
+	s.Require().Equal([]string{"C65", "S01", "G_MUR"}, res.NetworkDelta.PreviousPath)
+	s.Require().True(res.NetworkDelta.Changed)
+	s.Require().False(res.NetworkDelta.PreviousStillValid)
+	s.Require().Contains(res.NetworkDelta.Explanation, "перестроен")
 }
 
 func (s *ServiceSuite) TestGetSnapshotNotFoundError() {

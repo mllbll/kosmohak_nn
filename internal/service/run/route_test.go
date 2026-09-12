@@ -31,6 +31,68 @@ func TestRouteFindsMinHopPath(t *testing.T) {
 	if res.Hops != 3 {
 		t.Fatalf("expected 3 hops, got %d", res.Hops)
 	}
+	if res.Algorithm.Name != "bfs_min_hops" {
+		t.Fatalf("algorithm %s", res.Algorithm.Name)
+	}
+}
+
+func TestRouteCollectsAlternateMinHopPaths(t *testing.T) {
+	sc := sampleScenario()
+	snap := model.Snapshot{
+		TS: 0,
+		Satellites: []model.SatState{
+			{ID: "S1", Active: true},
+			{ID: "S2", Active: true},
+		},
+		Edges: []model.Edge{
+			{A: "C65", B: "S1", DistanceKM: 100},
+			{A: "C65", B: "S2", DistanceKM: 100},
+			{A: "S1", B: "G_MUR", DistanceKM: 100},
+			{A: "S2", B: "G_MUR", DistanceKM: 100},
+		},
+	}
+
+	res := Route(sc, snap, "C65")
+	if res.Hops != 2 {
+		t.Fatalf("min hops %d path %v", res.Hops, res.Path)
+	}
+	if len(res.Alternatives) == 0 {
+		t.Fatal("expected alternate min-hop path")
+	}
+	if res.Alternatives[0][1] == res.Path[1] {
+		t.Fatalf("alternate should use another satellite, path=%v alt=%v", res.Path, res.Alternatives[0])
+	}
+}
+
+func TestRouteIncludesBackupLongerPath(t *testing.T) {
+	sc := sampleScenario()
+	snap := model.Snapshot{
+		TS: 0,
+		Satellites: []model.SatState{
+			{ID: "S1", Active: true},
+			{ID: "S2", Active: true},
+		},
+		Edges: []model.Edge{
+			{A: "C65", B: "S1", DistanceKM: 100},
+			{A: "S1", B: "G_MUR", DistanceKM: 100},
+			{A: "S1", B: "S2", DistanceKM: 100},
+			{A: "S2", B: "G_MUR", DistanceKM: 100},
+		},
+	}
+
+	res := Route(sc, snap, "C65")
+	if got := []string{"C65", "S1", "G_MUR"}; len(res.Path) != 3 || res.Path[1] != "S1" {
+		t.Fatalf("primary %v want %v", res.Path, got)
+	}
+	foundBackup := false
+	for _, alt := range res.Alternatives {
+		if len(alt) == 4 && alt[1] == "S1" && alt[2] == "S2" {
+			foundBackup = true
+		}
+	}
+	if !foundBackup {
+		t.Fatalf("expected +1 hop backup via S2, alts=%v", res.Alternatives)
+	}
 }
 
 func TestRouteNoVisibleSat(t *testing.T) {
