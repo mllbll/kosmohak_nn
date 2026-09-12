@@ -10,3 +10,13 @@ services:
       RUNNER_SCRIPT: python/runner.py
       CORS_ORIGINS: "*"
     restart: unless-stopped
+
+  web:
+    build: ./frontend
+    image: kosmohak-nn-web:latest
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
