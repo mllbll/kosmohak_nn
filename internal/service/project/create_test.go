@@ -47,6 +47,18 @@ func (s *ServiceSuite) TestCreateInvalidArgument() {
 	s.Require().Empty(res)
 }
 
+func (s *ServiceSuite) TestCreateRejectsNamedField() {
+	sc := testScenario()
+	sc.Environment.ISLRangeKM = 0
+
+	res, err := s.service.Create(s.ctx, model.CreateProjectRequest{Scenario: sc})
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Equal("invalid argument: environment.isl_range_km must be in (0, 10000]", err.Error())
+	s.Require().Empty(res)
+}
+
 func (s *ServiceSuite) TestCreateGeometryError() {
 	var (
 		sc      = testScenario()

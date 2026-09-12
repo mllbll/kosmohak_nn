@@ -3,6 +3,7 @@ package v1
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -67,6 +68,24 @@ func (s *APISuite) TestCompareInvalidArgument() {
 
 	s.Require().Equal(http.StatusBadRequest, rec.Code)
 	s.runService.AssertNotCalled(s.T(), "Compare")
+}
+
+func (s *APISuite) TestCompareDifferentTimeGrid() {
+	var (
+		compareRunsRequest = model.CompareRunsRequest{
+			RunAID: gofakeit.UUID(),
+			RunBID: gofakeit.UUID(),
+		}
+		serviceErr = fmt.Errorf("%w: runs have different time grids (horizon_s/step_s)", model.ErrInvalidArgument)
+	)
+
+	s.runService.On("Compare", mock.Anything, compareRunsRequest).Return(model.CompareRunsResponse{}, serviceErr)
+
+	rec, req := s.newRequest(http.MethodPost, "/api/compare", "", compareRunsRequest)
+	s.api.Compare(rec, req)
+
+	s.Require().Equal(http.StatusBadRequest, rec.Code)
+	s.Require().Contains(rec.Body.String(), `"error":"invalid argument: runs have different time grids (horizon_s/step_s)"`)
 }
 
 func (s *APISuite) TestCompareInvalidArgumentEmpty() {

@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func TestRouteRecordAltCountAlwaysEncoded(t *testing.T) {
+	raw, err := json.Marshal(RouteRecord{
+		TS:       0,
+		ClientID: "C65",
+		Path:     []string{"C65", "S01", "G_MUR"},
+		Hops:     2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := got["alt_count"]
+	if !ok {
+		t.Fatal("alt_count missing")
+	}
+	if v != float64(0) {
+		t.Fatalf("alt_count=%v, want 0", v)
+	}
+}
+
 func TestCloneScenarioEncodesEmptyLists(t *testing.T) {
 	sc := Scenario{
 		SchemaVersion:  SchemaVersion,

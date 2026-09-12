@@ -22,7 +22,26 @@ func (s *service) Compare(ctx context.Context, req model.CompareRunsRequest) (mo
 		runs = append(runs, run)
 	}
 
+	if err := sameTimeGrid(runs); err != nil {
+		return model.CompareRunsResponse{}, err
+	}
+
 	return buildCompare(runs), nil
+}
+
+func sameTimeGrid(runs []model.Run) error {
+	if len(runs) < 2 {
+		return nil
+	}
+	h0 := runs[0].EffectiveScenario.Environment.HorizonS
+	s0 := runs[0].EffectiveScenario.Environment.StepS
+	for i := 1; i < len(runs); i++ {
+		env := runs[i].EffectiveScenario.Environment
+		if env.HorizonS != h0 || env.StepS != s0 {
+			return fmt.Errorf("%w: runs have different time grids (horizon_s/step_s)", model.ErrInvalidArgument)
+		}
+	}
+	return nil
 }
 
 func compareRunIDs(req model.CompareRunsRequest) ([]string, error) {
@@ -272,13 +291,6 @@ func configDiff(a, b model.Scenario) map[string]any {
 			diff[key.name] = map[string]float64{"a": key.av, "b": key.bv}
 		}
 	}
-	if a.Environment.HorizonS != b.Environment.HorizonS {
-		diff["horizon_s"] = map[string]int{"a": a.Environment.HorizonS, "b": b.Environment.HorizonS}
-	}
-	if a.Environment.StepS != b.Environment.StepS {
-		diff["step_s"] = map[string]int{"a": a.Environment.StepS, "b": b.Environment.StepS}
-	}
-
 	if !sameFailures(a.Failures, b.Failures) {
 		diff["failures"] = map[string]any{"a": a.Failures, "b": b.Failures}
 	}

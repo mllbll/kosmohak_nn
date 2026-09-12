@@ -16,6 +16,9 @@ type RouteRecord struct {
 	Path     []string  `json:"path"`
 	Reason   GapReason `json:"reason,omitempty"`
 	Hops     int       `json:"hops,omitempty"`
+	// AltCount is extra paths at this step (same hops and +1 hop). Always encoded,
+	// including 0: nonempty path and AltCount==0 means a single unique path.
+	AltCount int `json:"alt_count"`
 }
 
 type RouteResult struct {

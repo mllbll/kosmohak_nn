@@ -221,6 +221,23 @@ func (s *FixtureSuite) TestHTTPSmokeFixture01() {
 	s.Require().NotEmpty(route["path"])
 	s.Require().NotEmpty(snap["visible_satellites"])
 
+	fullRun := s.httpJSON(ts.URL, http.MethodGet, "/api/runs/"+runID, nil, http.StatusOK)
+	runRoutes := fullRun["routes"].([]any)
+	s.Require().NotEmpty(runRoutes)
+	var gridRoute map[string]any
+	for _, raw := range runRoutes {
+		rec := raw.(map[string]any)
+		if rec["t_s"] == float64(0) && rec["client_id"] == "C65" {
+			gridRoute = rec
+			break
+		}
+	}
+	s.Require().NotNil(gridRoute, "GET /runs must include t_s=0 client C65")
+	_, hasAltCount := gridRoute["alt_count"]
+	s.Require().True(hasAltCount, "GET /runs must encode alt_count for unique-path ticks")
+	alts, _ := route["alternatives"].([]any)
+	s.Require().Equal(float64(len(alts)), gridRoute["alt_count"])
+
 	export := s.httpJSON(ts.URL, http.MethodGet, "/api/runs/"+runID+"/export", nil, http.StatusOK)
 	s.Require().Equal(model.ResultSchemaVersion, export["schema_version"])
 	reimported := s.httpJSON(ts.URL, http.MethodPost, "/api/projects", export, http.StatusCreated)
@@ -306,8 +323,11 @@ func (s *FixtureSuite) assertRunInvariants(run model.Run) {
 				model.GapISLPartition,
 			}, rec.Reason)
 			s.Require().Zero(rec.Hops)
+			s.Require().Zero(rec.AltCount)
 			continue
 		}
+		s.Require().GreaterOrEqual(rec.AltCount, 0)
+		s.Require().LessOrEqual(rec.AltCount, 5)
 		s.Require().Empty(rec.Reason)
 		s.Require().Equal(rec.ClientID, rec.Path[0])
 		_, isGW := gateways[rec.Path[len(rec.Path)-1]]

@@ -87,6 +87,41 @@ func (s *ServiceSuite) TestPatchInvalidArgument() {
 
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Contains(err.Error(), `unknown plane id "UNKNOWN"`)
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestPatchRejectsPlaneAngle() {
+	var (
+		projectID = gofakeit.UUID()
+		sc        = testScenario()
+		raan      = 360.0
+
+		patchProjectRequest = model.PatchProjectRequest{
+			ProjectID: projectID,
+			Patch: model.Patch{
+				Planes: []model.PlanePatch{
+					{ID: "P1", RAANDeg: &raan},
+				},
+			},
+		}
+
+		project = model.Project{
+			ID:        projectID,
+			Base:      sc,
+			Effective: sc,
+		}
+	)
+
+	s.projectRepository.On("Get", s.ctx, projectID).Return(project, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+	s.projectRepository.AssertNotCalled(s.T(), "Update")
+
+	res, err := s.service.Patch(s.ctx, patchProjectRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Equal("invalid argument: planes[0].raan_deg must be in [0, 360)", err.Error())
 	s.Require().Empty(res)
 }
 

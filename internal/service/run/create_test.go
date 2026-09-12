@@ -29,7 +29,7 @@ func (s *ServiceSuite) TestCreateSuccess() {
 		_ = fn(snap)
 	}).Return(nil)
 	s.runRepository.On("Create", s.ctx, mock.MatchedBy(func(run model.Run) bool {
-		return run.ID != "" && run.ProjectID == projectID && len(run.Routes) == 1
+		return run.ID != "" && run.ProjectID == projectID && len(run.Routes) == 1 && run.Routes[0].AltCount == 0
 	})).Return(nil)
 
 	res, err := s.service.Create(s.ctx, createRunRequest)

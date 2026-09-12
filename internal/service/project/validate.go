@@ -12,26 +12,8 @@ func ValidateScenario(sc model.Scenario) error {
 		return fmt.Errorf("%w: schema_version expected %s", model.ErrInvalidArgument, model.SchemaVersion)
 	}
 
-	e := sc.Environment
-	if !finite(e.AltitudeKM) || !finite(e.InclinationDeg) || !finite(e.EarthAngle0Deg) ||
-		!finite(e.MinElevationDeg) || !finite(e.ISLRangeKM) || !finite(e.TargetAvailability) {
-		return fmt.Errorf("%w: non-finite environment value", model.ErrInvalidArgument)
-	}
-	if e.StepS <= 0 || e.HorizonS <= 0 {
-		return fmt.Errorf("%w: horizon_s and step_s must be positive", model.ErrInvalidArgument)
-	}
-	if e.HorizonS%e.StepS != 0 {
-		return fmt.Errorf("%w: horizon_s must be divisible by step_s", model.ErrInvalidArgument)
-	}
-	if e.StepS > e.HorizonS || e.HorizonS > 172800 {
-		return fmt.Errorf("%w: invalid time grid", model.ErrInvalidArgument)
-	}
-	if !(200 <= e.AltitudeKM && e.AltitudeKM <= 1200 && 0 < e.InclinationDeg && e.InclinationDeg <= 180) {
-		return fmt.Errorf("%w: invalid orbit", model.ErrInvalidArgument)
-	}
-	if !(0 <= e.MinElevationDeg && e.MinElevationDeg < 90 && 0 < e.ISLRangeKM && e.ISLRangeKM <= 10000 &&
-		0 <= e.TargetAvailability && e.TargetAvailability <= 1) {
-		return fmt.Errorf("%w: invalid link/target values", model.ErrInvalidArgument)
+	if err := validateEnvironment(sc.Environment); err != nil {
+		return err
 	}
 
 	if sc.Design.LaunchStage < 1 || sc.Design.LaunchStage > 3 {
@@ -47,8 +29,17 @@ func ValidateScenario(sc model.Scenario) error {
 			return fmt.Errorf("%w: duplicate plane id %q", model.ErrInvalidArgument, p.ID)
 		}
 		planes[p.ID] = struct{}{}
-		if !finite(p.RAANDeg) || !finite(p.PhaseDeg) || p.RAANDeg < 0 || p.RAANDeg >= 360 || p.PhaseDeg < 0 || p.PhaseDeg >= 360 {
-			return fmt.Errorf("%w: invalid plane angle for %q", model.ErrInvalidArgument, p.ID)
+		if !finite(p.RAANDeg) {
+			return fmt.Errorf("%w: planes[%d].raan_deg must be finite", model.ErrInvalidArgument, i)
+		}
+		if p.RAANDeg < 0 || p.RAANDeg >= 360 {
+			return fmt.Errorf("%w: planes[%d].raan_deg must be in [0, 360)", model.ErrInvalidArgument, i)
+		}
+		if !finite(p.PhaseDeg) {
+			return fmt.Errorf("%w: planes[%d].phase_deg must be finite", model.ErrInvalidArgument, i)
+		}
+		if p.PhaseDeg < 0 || p.PhaseDeg >= 360 {
+			return fmt.Errorf("%w: planes[%d].phase_deg must be in [0, 360)", model.ErrInvalidArgument, i)
 		}
 	}
 	if len(planes) == 0 {
@@ -67,8 +58,11 @@ func ValidateScenario(sc model.Scenario) error {
 		if _, ok := planes[sat.PlaneID]; !ok {
 			return fmt.Errorf("%w: satellite %q: unknown plane_id %q", model.ErrInvalidArgument, sat.ID, sat.PlaneID)
 		}
-		if sat.LaunchBatch < 1 || sat.LaunchBatch > 3 || !finite(sat.SlotDeg) {
-			return fmt.Errorf("%w: invalid satellite %q", model.ErrInvalidArgument, sat.ID)
+		if sat.LaunchBatch < 1 || sat.LaunchBatch > 3 {
+			return fmt.Errorf("%w: satellites[%d].launch_batch must be 1, 2 or 3", model.ErrInvalidArgument, i)
+		}
+		if !finite(sat.SlotDeg) {
+			return fmt.Errorf("%w: satellites[%d].slot_deg must be finite", model.ErrInvalidArgument, i)
 		}
 	}
 	if len(sats) == 0 {
@@ -90,8 +84,17 @@ func ValidateScenario(sc model.Scenario) error {
 		if g.Role != "client" && g.Role != "gateway" {
 			return fmt.Errorf("%w: ground_sites[%d].role must be client or gateway", model.ErrInvalidArgument, i)
 		}
-		if !finite(g.LatDeg) || !finite(g.LonDeg) || g.LatDeg < -90 || g.LatDeg > 90 || g.LonDeg < -180 || g.LonDeg > 180 {
-			return fmt.Errorf("%w: invalid ground site %q", model.ErrInvalidArgument, g.ID)
+		if !finite(g.LatDeg) {
+			return fmt.Errorf("%w: ground_sites[%d].lat_deg must be finite", model.ErrInvalidArgument, i)
+		}
+		if g.LatDeg < -90 || g.LatDeg > 90 {
+			return fmt.Errorf("%w: ground_sites[%d].lat_deg must be in [-90, 90]", model.ErrInvalidArgument, i)
+		}
+		if !finite(g.LonDeg) {
+			return fmt.Errorf("%w: ground_sites[%d].lon_deg must be finite", model.ErrInvalidArgument, i)
+		}
+		if g.LonDeg < -180 || g.LonDeg > 180 {
+			return fmt.Errorf("%w: ground_sites[%d].lon_deg must be in [-180, 180]", model.ErrInvalidArgument, i)
 		}
 	}
 
@@ -132,6 +135,58 @@ func ApplyPatch(sc model.Scenario, p model.Patch) (model.Scenario, error) {
 		}
 	}
 	return sc, ValidateScenario(sc)
+}
+
+func validateEnvironment(e model.Environment) error {
+	fields := []struct {
+		path string
+		v    float64
+	}{
+		{"environment.altitude_km", e.AltitudeKM},
+		{"environment.inclination_deg", e.InclinationDeg},
+		{"environment.earth_angle0_deg", e.EarthAngle0Deg},
+		{"environment.min_elevation_deg", e.MinElevationDeg},
+		{"environment.isl_range_km", e.ISLRangeKM},
+		{"environment.target_availability", e.TargetAvailability},
+	}
+	for _, f := range fields {
+		if !finite(f.v) {
+			return fmt.Errorf("%w: %s must be finite", model.ErrInvalidArgument, f.path)
+		}
+	}
+
+	if e.StepS <= 0 {
+		return fmt.Errorf("%w: environment.step_s must be > 0", model.ErrInvalidArgument)
+	}
+	if e.HorizonS <= 0 {
+		return fmt.Errorf("%w: environment.horizon_s must be > 0", model.ErrInvalidArgument)
+	}
+	if e.HorizonS > 172800 {
+		return fmt.Errorf("%w: environment.horizon_s must be <= 172800", model.ErrInvalidArgument)
+	}
+	if e.StepS > e.HorizonS {
+		return fmt.Errorf("%w: environment.step_s must be <= environment.horizon_s", model.ErrInvalidArgument)
+	}
+	if e.HorizonS%e.StepS != 0 {
+		return fmt.Errorf("%w: environment.horizon_s must be a multiple of environment.step_s", model.ErrInvalidArgument)
+	}
+
+	if e.AltitudeKM < 200 || e.AltitudeKM > 1200 {
+		return fmt.Errorf("%w: environment.altitude_km must be in [200, 1200]", model.ErrInvalidArgument)
+	}
+	if e.InclinationDeg <= 0 || e.InclinationDeg > 180 {
+		return fmt.Errorf("%w: environment.inclination_deg must be in (0, 180]", model.ErrInvalidArgument)
+	}
+	if e.MinElevationDeg < 0 || e.MinElevationDeg >= 90 {
+		return fmt.Errorf("%w: environment.min_elevation_deg must be in [0, 90)", model.ErrInvalidArgument)
+	}
+	if e.ISLRangeKM <= 0 || e.ISLRangeKM > 10000 {
+		return fmt.Errorf("%w: environment.isl_range_km must be in (0, 10000]", model.ErrInvalidArgument)
+	}
+	if e.TargetAvailability < 0 || e.TargetAvailability > 1 {
+		return fmt.Errorf("%w: environment.target_availability must be in [0, 1]", model.ErrInvalidArgument)
+	}
+	return nil
 }
 
 func validateOutages(sc model.Scenario) error {

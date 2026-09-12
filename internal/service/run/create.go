@@ -67,6 +67,7 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 				Path:     path,
 				Reason:   res.Reason,
 				Hops:     res.Hops,
+				AltCount: len(res.Alternatives),
 			})
 			visible[t][clientID] = clientVisible(sc, snap, clientID)
 		}
