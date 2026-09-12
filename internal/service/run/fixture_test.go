@@ -28,11 +28,17 @@ func (s *FixtureSuite) SetupSuite() {
 	s.client = geometry.NewClient("python3", filepath.Join(s.root, "python", "runner.py"))
 
 	if _, err := exec.LookPath("python3"); err != nil {
+		if os.Getenv("REQUIRE_GEOMETRY_TESTS") == "1" {
+			s.Require().NoError(err)
+		}
 		s.T().Skip("python3 not found")
 	}
 	sc := s.load("data/01_full_constellation.json")
 	sc.Environment.HorizonS = sc.Environment.StepS
 	if _, err := s.client.Snapshot(s.ctx, sc, 0); err != nil {
+		if os.Getenv("REQUIRE_GEOMETRY_TESTS") == "1" {
+			s.Require().NoError(err)
+		}
 		s.T().Skipf("geometry.py unavailable: %v", err)
 	}
 }

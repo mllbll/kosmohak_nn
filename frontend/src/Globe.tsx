@@ -149,6 +149,8 @@ export default function Globe(props: Props) {
     function animate() {
       frame = requestAnimationFrame(animate);
       controls.update();
+      // DOM labels and WebGL must use the same camera pose in this frame.
+      camera.updateMatrixWorld();
       for (const label of state.labelsData) {
         const ray = label.position.clone().sub(camera.position),
           distance = ray.length();
@@ -165,7 +167,7 @@ export default function Globe(props: Props) {
           Math.abs(p.y) < 1.1;
         label.el.style.display = visible ? "" : "none";
         label.el.style.transform =
-          "translate(-50%, -50%) translate(" +
+          "translate(-12px, -50%) translate(" +
           ((p.x + 1) * el!.clientWidth) / 2 +
           "px," +
           ((-p.y + 1) * el!.clientHeight) / 2 +
@@ -272,6 +274,8 @@ export default function Globe(props: Props) {
       mesh.position.copy(pos);
       state.group.add(mesh);
       const button = document.createElement("button");
+      // A new snapshot must never expose a label at the overlay origin.
+      button.style.display = "none";
       button.className =
         "map-label " +
         n.kind +

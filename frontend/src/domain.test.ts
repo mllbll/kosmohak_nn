@@ -70,6 +70,11 @@ describe("scenario input and validation", () => {
   });
 });
 describe("timeline semantics", () => {
+  it("preserves fractional outage boundaries", () => {
+    for (const value of [0.5, 120.125, 86400.75])
+      expect(parseClock(clock(value))).toBe(value);
+    expect(parseClock("00:00:60.1")).toBeNaN();
+  });
   it("supports 24:00 and clamps playback to last sampled interval", () => {
     expect(parseClock("24:00:00")).toBe(86400);
     expect(parseClock("00:60:00")).toBeNaN();
@@ -123,6 +128,16 @@ describe("comparison and shared coordinates", () => {
     expect(configChanges(scenario, s).map((x) => x.label)).toEqual(
       expect.arrayContaining(["Дальность ISL, км", "Фаза P2"]),
     );
+  });
+  it("rejects different targets and reports fine configuration changes", () => {
+    const s = clone(scenario);
+    s.environment.target_availability = 0.5;
+    expect(comparisonProblem(run(scenario), run(s))).toContain("целевые");
+    s.ground_sites[0].lat_deg += 0.001;
+    s.design.satellites[0].slot_deg += 0.001;
+    const labels = configChanges(scenario, s).map((x) => x.label);
+    expect(labels).toContain("Наземные пункты");
+    expect(labels).toContain("Состав спутников");
   });
   it("round trips ground coordinates through the same ECEF representation used by both maps", () => {
     for (const g of scenario.ground_sites) {

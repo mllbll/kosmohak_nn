@@ -23,12 +23,23 @@ export const percent = (n: number) =>
 export const number = (n: number) =>
   n.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 export function clock(s: number) {
-  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, Math.floor(s) % 60]
-    .map((n) => String(n).padStart(2, "0"))
-    .join(":");
+  return (
+    [Math.floor(s / 3600), Math.floor(s / 60) % 60, Math.floor(s) % 60]
+      .map((n) => String(n).padStart(2, "0"))
+      .join(":") +
+    (s % 1
+      ? "." +
+        s
+          .toLocaleString("en-US", {
+            useGrouping: false,
+            maximumFractionDigits: 20,
+          })
+          .split(".")[1]
+      : "")
+  );
 }
 export function parseClock(s: string) {
-  if (!/^\d{1,2}:\d{2}:\d{2}$/.test(s)) return NaN;
+  if (!/^\d{1,2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) return NaN;
   const [h, m, t] = s.split(":").map(Number);
   return m < 60 && t < 60 ? h * 3600 + m * 60 + t : NaN;
 }
@@ -94,6 +105,8 @@ export function intervals(routes: Route[], client: string, step: number) {
 export function comparisonProblem(a: Run, b: Run) {
   const ea = a.effective_scenario.environment,
     eb = b.effective_scenario.environment;
+  if (ea.target_availability !== eb.target_availability)
+    return "Разные целевые доли доступности. Установите одинаковую цель и повторите расчёт.";
   if (ea.horizon_s !== eb.horizon_s || ea.step_s !== eb.step_s)
     return "Разная временная сетка. Установите одинаковые период и шаг во вкладке «Проект» и повторите расчёт.";
   const pick = (s: Scenario) =>
@@ -162,9 +175,9 @@ export function configChanges(a: Scenario, b: Scenario) {
           " (" +
           (g.role === "gateway" ? "шлюз" : "пункт") +
           "): " +
-          number(g.lat_deg) +
+          String(g.lat_deg) +
           "°, " +
-          number(g.lon_deg) +
+          String(g.lon_deg) +
           "°",
       )
       .join("; ");
@@ -176,7 +189,7 @@ export function configChanges(a: Scenario, b: Scenario) {
           ": " +
           x.plane_id +
           ", " +
-          number(x.slot_deg) +
+          String(x.slot_deg) +
           "°, очередь " +
           x.launch_batch,
       )

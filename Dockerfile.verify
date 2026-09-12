@@ -1,0 +1,7 @@
+FROM golang:1.23-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends python3-numpy && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+ENV REQUIRE_GEOMETRY_TESTS=1
+CMD ["sh", "-c", "python3 -m unittest discover -s python -v && go test -race -count=1 ./..."]

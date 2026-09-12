@@ -103,11 +103,18 @@ func cloneClientMetrics(in []model.ClientMetrics) []model.ClientMetrics {
 func dominantReasonCount(counts map[model.GapReason]int) model.GapReason {
 	var best model.GapReason
 	bestN := 0
+	tied := false
 	for reason, n := range counts {
 		if n > bestN {
 			best = reason
 			bestN = n
+			tied = false
+		} else if n == bestN {
+			tied = true
 		}
+	}
+	if tied {
+		return model.GapNone
 	}
 	return best
 }

@@ -970,6 +970,15 @@ td input {
   background: #0b1727c9;
   border: 0;
 }
+.globe-labels .map-label {
+  /* Position is projected every frame; CSS easing would detach it from Earth. */
+  transition: background 0.15s;
+}
+.globe-labels .node-symbol {
+  width: 14px;
+  flex: 0 0 14px;
+  text-align: center;
+}
 .map-label.chosen {
   background: #123e55b3;
   outline: 1px solid #44def1a0;

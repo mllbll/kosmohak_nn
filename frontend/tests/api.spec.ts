@@ -2,6 +2,33 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { Scenario, Run, Snapshot } from "../src/types";
 
+test("API rejects incompatible comparisons and accepts renamed custom node IDs", async ({ request }) => {
+  const scenario = JSON.parse(readFileSync("public/scenarios/01_full_constellation.json", "utf8")) as Scenario;
+  scenario.environment.horizon_s = 240;
+  for (const sat of scenario.design.satellites) sat.id = "custom-" + sat.id;
+  for (const site of scenario.ground_sites) site.id = "custom-" + site.id;
+  const calculate = async (s: Scenario) => {
+    const created = await request.post("/api/projects", { data: s });
+    expect(created.status()).toBe(201);
+    const result = await request.post("/api/projects/" + (await created.json()).id + "/runs");
+    expect(result.status()).toBe(201);
+    return (await result.json()).run_id as string;
+  };
+  const first = await calculate(scenario);
+  const exported = await (await request.get("/api/runs/" + first + "/export")).json();
+  expect(exported.routes).toHaveLength(6);
+  expect(exported.routes.every((r: {client_id: string}) => r.client_id.startsWith("custom-"))).toBe(true);
+  for (const change of ["step", "target", "client"]) {
+    const changed = structuredClone(scenario);
+    if (change === "step") changed.environment.step_s = 60;
+    if (change === "target") changed.environment.target_availability = 0.5;
+    if (change === "client") changed.ground_sites.find(x => x.role === "client")!.lat_deg += 1;
+    const second = await calculate(changed);
+    expect((await request.post("/api/compare", {data: {run_a: first, run_b: second}})).status()).toBe(400);
+  }
+  expect((await request.post("/api/compare", {data: {run_a: first, run_b: first}})).status()).toBe(400);
+});
+
 test("four complete daily scenarios obey the frontend API contract", async ({
   request,
 }) => {

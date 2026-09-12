@@ -22,15 +22,54 @@ func (s *service) Compare(ctx context.Context, req model.CompareRunsRequest) (mo
 		runs = append(runs, run)
 	}
 
+	for _, candidate := range runs[1:] {
+		if err := compatibleScenarios(runs[0].EffectiveScenario, candidate.EffectiveScenario); err != nil {
+			return model.CompareRunsResponse{}, err
+		}
+	}
 	return buildCompare(runs), nil
 }
 
-func compareRunIDs(req model.CompareRunsRequest) ([]string, error) {
-	if len(req.RunIDs) >= 2 {
-		return req.RunIDs, nil
+func compatibleScenarios(a, b model.Scenario) error {
+	if a.Environment.HorizonS != b.Environment.HorizonS || a.Environment.StepS != b.Environment.StepS || a.Environment.TargetAvailability != b.Environment.TargetAvailability {
+		return fmt.Errorf("%w: comparison requires the same time grid and availability target", model.ErrInvalidArgument)
 	}
-	if req.RunAID != "" && req.RunBID != "" {
-		return []string{req.RunAID, req.RunBID}, nil
+	clients := make(map[string]model.GroundSite)
+	for _, site := range a.GroundSites {
+		if site.Role == "client" {
+			clients[site.ID] = site
+		}
+	}
+	for _, site := range b.GroundSites {
+		if site.Role != "client" {
+			continue
+		}
+		original, ok := clients[site.ID]
+		if !ok || original.LatDeg != site.LatDeg || original.LonDeg != site.LonDeg {
+			return fmt.Errorf("%w: comparison requires the same client sites and coordinates", model.ErrInvalidArgument)
+		}
+		delete(clients, site.ID)
+	}
+	if len(clients) != 0 {
+		return fmt.Errorf("%w: comparison requires the same client sites", model.ErrInvalidArgument)
+	}
+	return nil
+}
+
+func compareRunIDs(req model.CompareRunsRequest) ([]string, error) {
+	ids := req.RunIDs
+	if len(ids) == 0 {
+		ids = []string{req.RunAID, req.RunBID}
+	}
+	seen := make(map[string]bool)
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			return nil, fmt.Errorf("%w: distinct nonempty run ids required", model.ErrInvalidArgument)
+		}
+		seen[id] = true
+	}
+	if len(ids) >= 2 {
+		return ids, nil
 	}
 	return nil, fmt.Errorf("%w: two or more run ids required", model.ErrInvalidArgument)
 }
