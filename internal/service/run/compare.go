@@ -44,7 +44,7 @@ func buildCompare(runs []model.Run) model.CompareRunsResponse {
 	resp := model.CompareRunsResponse{
 		Variants:       variants,
 		Clients:        clientDiffs(runs),
-		Recommendation: recommend(variants),
+		Recommendation: recommend(runs, variants),
 	}
 
 	if len(runs) == 2 {
@@ -197,9 +197,16 @@ func cmpClientMetric(a, b model.ClientRunMetric) int {
 	}
 }
 
-func recommend(variants []model.CompareVariant) model.CompareRecommendation {
-	if len(variants) == 0 {
-		return model.CompareRecommendation{Better: "tie", Reason: "Нет вариантов для сравнения"}
+func recommend(runs []model.Run, variants []model.CompareVariant) model.CompareRecommendation {
+	if len(variants) == 0 || len(runs) != len(variants) {
+		return model.CompareRecommendation{
+			Better:      "tie",
+			Reason:      "Нет вариантов для сравнения",
+			Advantages:  []string{},
+			Conditions:  []string{},
+			Limitations: []string{},
+			Conclusion:  "Недостаточно прогонов, чтобы обосновать выбор конфигурации",
+		}
 	}
 
 	best := 0
@@ -208,28 +215,14 @@ func recommend(variants []model.CompareVariant) model.CompareRecommendation {
 			best = i
 		}
 	}
+	tied := false
 	for i, v := range variants {
 		if i != best && cmpVariant(v, variants[best]) == 0 {
-			return model.CompareRecommendation{
-				Better: "tie",
-				Reason: "Ничья: варианты дают одинаковую доступность для заданных пунктов",
-			}
+			tied = true
+			break
 		}
 	}
-
-	v := variants[best]
-	reason := fmt.Sprintf(
-		"Рекомендуется «%s» (этап %d): %d из %d пунктов достигают цели, средняя доступность пути %.0f%%",
-		v.Title,
-		v.LaunchStage,
-		v.ClientsMeetingTarget,
-		v.ClientsTotal,
-		v.MeanPathRatio*100,
-	)
-	return model.CompareRecommendation{
-		RunID:  v.RunID,
-		Reason: reason,
-	}
+	return justifyRecommendation(runs, variants, best, tied)
 }
 
 func cmpVariant(a, b model.CompareVariant) int {

@@ -1,6 +1,8 @@
 package run
 
 import (
+	"strings"
+
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
@@ -44,6 +46,13 @@ func (s *ServiceSuite) TestCompareSuccess() {
 	s.Require().Equal("a", res.Recommendation.Better)
 	s.Require().Equal(runA.ID, res.Recommendation.RunID)
 	s.Require().NotEmpty(res.Recommendation.Reason)
+	s.Require().NotEmpty(res.Recommendation.Advantages)
+	s.Require().NotEmpty(res.Recommendation.Conditions)
+	s.Require().NotEmpty(res.Recommendation.Limitations)
+	s.Require().NotEmpty(res.Recommendation.Conclusion)
+	s.Require().Contains(strings.Join(res.Recommendation.Advantages, "\n"), "C65")
+	s.Require().Contains(res.Recommendation.Conditions[0], "90")
+	s.Require().Contains(res.Recommendation.Conclusion, "этап 3")
 }
 
 func (s *ServiceSuite) TestCompareRunIDsSuccess() {
@@ -102,6 +111,9 @@ func (s *ServiceSuite) TestCompareTie() {
 	s.Require().Equal("tie", res.Recommendation.Better)
 	s.Require().Empty(res.Recommendation.RunID)
 	s.Require().Equal("tie", res.Clients[0].Better)
+	s.Require().NotEmpty(res.Recommendation.Conditions)
+	s.Require().NotEmpty(res.Recommendation.Limitations)
+	s.Require().Contains(res.Recommendation.Conclusion, "нет единственного победителя")
 }
 
 func (s *ServiceSuite) TestCompareInvalidArgument() {

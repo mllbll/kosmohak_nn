@@ -119,9 +119,13 @@ type CompareVariant struct {
 }
 
 type CompareRecommendation struct {
-	RunID  string `json:"run_id,omitempty"`
-	Better string `json:"better"`
-	Reason string `json:"reason"`
+	RunID       string   `json:"run_id,omitempty"`
+	Better      string   `json:"better"`
+	Reason      string   `json:"reason"`
+	Advantages  []string `json:"advantages"`
+	Conditions  []string `json:"conditions"`
+	Limitations []string `json:"limitations"`
+	Conclusion  string   `json:"conclusion"`
 }
 
 type ClientDiff struct {
