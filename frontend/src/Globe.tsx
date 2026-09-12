@@ -38,6 +38,7 @@ export default function Globe(props: Props) {
       group: THREE.Group;
       labels: HTMLDivElement;
       labelsData: { el: HTMLButtonElement; position: THREE.Vector3 }[];
+      draw: () => void;
     } | null>(null),
     propsRef = useRef(props),
     [ready, setReady] = useState(0),
@@ -135,6 +136,7 @@ export default function Globe(props: Props) {
       group,
       labels,
       labelsData: [] as { el: HTMLButtonElement; position: THREE.Vector3 }[],
+      draw: () => {},
     };
     api.current = state;
     const resize = new ResizeObserver(() => {
@@ -146,8 +148,7 @@ export default function Globe(props: Props) {
     });
     resize.observe(el);
     let frame = 0;
-    function animate() {
-      frame = requestAnimationFrame(animate);
+    function draw() {
       controls.update();
       // DOM labels and WebGL must use the same camera pose in this frame.
       camera.updateMatrixWorld();
@@ -174,6 +175,11 @@ export default function Globe(props: Props) {
           "px)";
       }
       renderer.render(scene, camera);
+    }
+    state.draw = draw;
+    function animate() {
+      frame = requestAnimationFrame(animate);
+      draw();
     }
     animate();
     setReady((x) => x + 1);
@@ -260,19 +266,7 @@ export default function Globe(props: Props) {
         continue;
       const pos = vector(n.position);
       if (n.kind !== "satellite") pos.multiplyScalar(1.003);
-      const material = new THREE.MeshBasicMaterial({ color: nodeColor(n) });
-      const mesh = new THREE.Mesh(
-        n.kind === "gateway"
-          ? new THREE.BoxGeometry(0.018, 0.018, 0.018)
-          : new THREE.SphereGeometry(
-              n.kind === "satellite" ? 0.008 : 0.012,
-              10,
-              8,
-            ),
-        material,
-      );
-      mesh.position.copy(pos);
-      state.group.add(mesh);
+      // The projected symbol is the sole marker; do not draw a second WebGL dot.
       const button = document.createElement("button");
       // A new snapshot must never expose a label at the overlay origin.
       button.style.display = "none";
@@ -320,6 +314,8 @@ export default function Globe(props: Props) {
       state.labels.append(button);
       state.labelsData.push({ el: button, position: pos });
     }
+    // Commit geometry and projected markers together, without an empty frame.
+    state.draw();
   }, [props.scenario, props.snapshot, props.layers, props.selected, ready]);
   function zoom(scale: number) {
     const s = api.current;

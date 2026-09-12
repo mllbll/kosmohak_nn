@@ -1,5 +1,62 @@
 import { test, expect } from "@playwright/test";
 
+test("simulation keeps the previous map while loading and uses the selected step", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Период расчёта", { exact: true }).fill("1200");
+  await page
+    .getByRole("button", { name: "Запустить расчёт", exact: true })
+    .click();
+  await expect(page.locator(".globe-host canvas")).toBeVisible();
+  await expect(page.locator(".map-busy")).toHaveCount(0);
+  const input = page.getByLabel("Время расчёта", { exact: true });
+  await input.fill("00:04:00");
+  await input.press("Enter");
+  await expect(page.locator(".map-heading")).toContainText("00:04:00");
+  await expect(page.locator(".map-busy")).toHaveCount(0);
+  const markers = page.locator(".globe-labels .map-label");
+  await expect(markers).toHaveCount(52);
+  const oldMarkers = await markers.evaluateAll((nodes) =>
+    nodes.map((n) => n.getAttribute("aria-label")),
+  );
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/snapshot?**", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.getByLabel("Шаг симуляции", { exact: true }).fill("240");
+  await page
+    .getByRole("button", { name: "Следующий шаг", exact: true })
+    .click();
+  await expect(page.locator(".map-busy")).toBeVisible();
+  await expect(input).toHaveValue("00:08:00");
+  await expect(page.getByLabel("Временная шкала", { exact: true })).toHaveValue(
+    "240",
+  );
+  await expect(page.locator(".map-heading")).toContainText("00:04:00");
+  expect(
+    await markers.evaluateAll((nodes) =>
+      nodes.map((n) => n.getAttribute("aria-label")),
+    ),
+  ).toEqual(oldMarkers);
+  release();
+  await expect(page.locator(".map-busy")).toHaveCount(0);
+  await expect(page.locator(".map-heading")).toContainText("00:08:00");
+  await expect(page.getByLabel("Временная шкала", { exact: true })).toHaveValue(
+    "480",
+  );
+  await expect(markers).toHaveCount(52);
+  await page
+    .getByRole("button", { name: "Воспроизвести", exact: true })
+    .click();
+  await expect(input).toHaveValue("00:12:00");
+  await page.getByRole("button", { name: "Пауза", exact: true }).click();
+});
+
 test("3D markers stay at their projected coordinates during rotation and playback", async ({
   page,
 }) => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Settings2,
   Layers3,
@@ -24,6 +24,7 @@ import {
 } from "./domain";
 import { Empty, Notice } from "./ui";
 import Timeline from "./Timeline";
+import { liveSnapshot } from "./liveSnapshot";
 import type { FailureSelection } from "./FailuresView";
 const Globe = lazy(() => import("./Globe"));
 const Map2D = lazy(() => import("./Map2D"));
@@ -55,13 +56,21 @@ export default function NetworkView(p: Props) {
     [selected, setSelected] = useState(""),
     [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
+    [playbackStep, setPlaybackStep] = useState(s.environment.step_s),
     [snapshot, setSnapshot] = useState<Snapshot>(),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
+  const timeRef = useRef(time);
+  timeRef.current = time;
+  const lastTime = s.environment.horizon_s - 0.001;
   useEffect(() => {
     setTime(0);
     setPlaying(false);
+    setPlaybackStep(
+      p.run?.effective_scenario.environment.step_s ??
+        p.scenario.environment.step_s,
+    );
     setSnapshot(undefined);
     setClient(
       p.run?.effective_scenario.ground_sites.find((x) => x.role === "client")
@@ -78,9 +87,14 @@ export default function NetworkView(p: Props) {
       setError("");
       return;
     }
+    if (playbackStep === 0) {
+      setSnapshot(liveSnapshot(p.run.effective_scenario, time, client));
+      setLoading(false);
+      setError("");
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
-    setSnapshot(undefined);
     setError("");
     const timer = setTimeout(() => {
       api
@@ -106,18 +120,43 @@ export default function NetworkView(p: Props) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [p.run?.id, time, client, retry]);
+  }, [p.run?.id, time, client, retry, playbackStep]);
   useEffect(() => {
-    if (!playing || loading || !snapshot) return;
+    if (!playing || playbackStep !== 0 || !p.run) return;
+    let frame = 0,
+      previous = performance.now();
+    const advance = (now: number) => {
+      if (now - previous >= 1000 / 30) {
+        // Do not jump forward when returning from a background browser tab.
+        const next = Math.min(
+          lastTime,
+          timeRef.current + Math.min((now - previous) / 1000, 0.1),
+        );
+        previous = now;
+        timeRef.current = Math.round(next * 1000) / 1000;
+        setTime(timeRef.current);
+        if (next >= lastTime) {
+          setPlaying(false);
+          return;
+        }
+      }
+      frame = requestAnimationFrame(advance);
+    };
+    frame = requestAnimationFrame(advance);
+    return () => cancelAnimationFrame(frame);
+  }, [playing, playbackStep, p.run?.id, lastTime]);
+  useEffect(() => {
+    if (!playing || playbackStep === 0 || loading || !snapshot) return;
     const id = setTimeout(() => {
-      if (time >= s.environment.horizon_s - s.environment.step_s) {
+      if (time >= lastTime) {
         setPlaying(false);
         return;
       }
-      setTime((t) => t + s.environment.step_s);
+      setTime((t) => Math.min(lastTime, t + playbackStep));
     }, 650);
     return () => clearTimeout(id);
-  }, [playing, loading, snapshot, time, s.environment]);
+  }, [playing, loading, snapshot, time, lastTime, playbackStep]);
+  const displayedTime = snapshot?.snapshot.t_s ?? time;
   function select(id: string) {
     setSelected(id);
     setInspector(true);
@@ -132,7 +171,7 @@ export default function NetworkView(p: Props) {
     ? {
         active: snapshot.snapshot.satellites.filter((x) => x.active).length,
         failed: snapshot.snapshot.satellites.filter(
-          (x) => satelliteStatus(s, x.id, time) === "failed",
+          (x) => satelliteStatus(s, x.id, displayedTime) === "failed",
         ).length,
       }
     : null;
@@ -197,7 +236,9 @@ export default function NetworkView(p: Props) {
             <div>
               <h1>Состояние сети</h1>
               <span className="muted mono">
-                {p.run ? "t = " + clock(time) : "Обзор наземных пунктов"}
+                {p.run
+                  ? "t = " + clock(displayedTime)
+                  : "Обзор наземных пунктов"}
               </span>
             </div>
             <div className="actions">
@@ -489,9 +530,10 @@ export default function NetworkView(p: Props) {
                       {selectedSat.launch_batch}
                     </p>
                     <p>
-                      {satelliteStatus(s, selected, time) === "active"
+                      {satelliteStatus(s, selected, displayedTime) === "active"
                         ? "Активен"
-                        : satelliteStatus(s, selected, time) === "failed"
+                        : satelliteStatus(s, selected, displayedTime) ===
+                            "failed"
                           ? "В отказе"
                           : "Ещё не запущен"}
                     </p>
@@ -510,8 +552,8 @@ export default function NetworkView(p: Props) {
                           s.gateway_outages.some(
                             (x) =>
                               x.gateway_id === selected &&
-                              x.start_s <= time &&
-                              time < x.end_s,
+                              x.start_s <= displayedTime &&
+                              displayedTime < x.end_s,
                           )
                             ? "error-text"
                             : "success-text"
@@ -520,8 +562,8 @@ export default function NetworkView(p: Props) {
                         {s.gateway_outages.some(
                           (x) =>
                             x.gateway_id === selected &&
-                            x.start_s <= time &&
-                            time < x.end_s,
+                            x.start_s <= displayedTime &&
+                            displayedTime < x.end_s,
                         )
                           ? "Шлюз недоступен"
                           : "Шлюз работает"}
@@ -537,7 +579,7 @@ export default function NetworkView(p: Props) {
                       p.onFailure({
                         kind: selectedSat ? "satellite" : "gateway",
                         id: selected,
-                        start: time,
+                        start: displayedTime,
                       })
                     }
                   >
@@ -553,6 +595,7 @@ export default function NetworkView(p: Props) {
         <Timeline
           run={p.run}
           time={time}
+          displayedTime={displayedTime}
           onTime={setTime}
           client={client}
           onClient={(id) => {
@@ -561,11 +604,12 @@ export default function NetworkView(p: Props) {
           }}
           playing={playing}
           onPlaying={(value) => {
-            if (value && time >= s.environment.horizon_s - s.environment.step_s)
-              setTime(0);
+            if (value && time >= lastTime) setTime(0);
             setPlaying(value);
           }}
           loading={loading}
+          playbackStep={playbackStep}
+          onPlaybackStep={setPlaybackStep}
         />
       ) : (
         <Notice tone="info">

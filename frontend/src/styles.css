@@ -979,6 +979,14 @@ td input {
   flex: 0 0 14px;
   text-align: center;
 }
+.simulation-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.simulation-step input {
+  width: 90px;
+}
 .map-label.chosen {
   background: #123e55b3;
   outline: 1px solid #44def1a0;
@@ -1289,11 +1297,42 @@ summary {
   font-size: 11px;
 }
 .timeline-grid.axis {
-  height: 46px;
+  height: 58px;
 }
 .time-plot {
   position: relative;
-  height: 46px;
+  height: 58px;
+}
+.time-progress-rail {
+  position: absolute;
+  top: 25px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #37516b;
+  pointer-events: none;
+}
+.time-progress-fill {
+  position: absolute;
+  height: 100%;
+  background: var(--cyan);
+}
+.time-progress-marker {
+  position: absolute;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cyan);
+  transform: translateX(-50%);
+}
+.time-progress-label {
+  position: absolute;
+  top: 10px;
+  width: 88px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--cyan);
 }
 .tick-labels {
   position: absolute;
@@ -1329,26 +1368,26 @@ summary {
 }
 .time-slider::-webkit-slider-runnable-track {
   height: 2px;
-  background: #37516b;
+  background: transparent;
 }
 .time-slider::-webkit-slider-thumb {
   appearance: none;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: transparent;
   margin-top: -4px;
 }
 .time-slider::-moz-range-track {
   height: 2px;
-  background: #37516b;
+  background: transparent;
 }
 .time-slider::-moz-range-thumb {
   width: 10px;
   height: 10px;
   border: 0;
   border-radius: 50%;
-  background: var(--cyan);
+  background: transparent;
 }
 .timeline-row {
   height: 31px;
