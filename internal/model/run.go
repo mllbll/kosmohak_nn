@@ -42,13 +42,21 @@ type NetworkDelta struct {
 	Explanation        string   `json:"explanation"`
 }
 
+type GapInterval struct {
+	StartS    int       `json:"start_s"`
+	EndS      int       `json:"end_s"`
+	DurationS int       `json:"duration_s"`
+	Reason    GapReason `json:"reason,omitempty"`
+}
+
 type ClientMetrics struct {
-	ClientID        string  `json:"client_id"`
-	VisibilityRatio float64 `json:"visibility_ratio"`
-	PathRatio       float64 `json:"path_ratio"`
-	MaxGapS         int     `json:"max_gap_s"`
-	MeanHops        float64 `json:"mean_hops"`
-	MeetsTarget     bool    `json:"meets_target"`
+	ClientID        string        `json:"client_id"`
+	VisibilityRatio float64       `json:"visibility_ratio"`
+	PathRatio       float64       `json:"path_ratio"`
+	MaxGapS         int           `json:"max_gap_s"`
+	MeanHops        float64       `json:"mean_hops"`
+	MeetsTarget     bool          `json:"meets_target"`
+	Gaps            []GapInterval `json:"gaps"`
 }
 
 type Run struct {
@@ -85,9 +93,10 @@ type GetSnapshotRequest struct {
 }
 
 type GetSnapshotResponse struct {
-	Snapshot     Snapshot     `json:"snapshot"`
-	Route        RouteResult  `json:"route"`
-	NetworkDelta NetworkDelta `json:"network_delta"`
+	Snapshot          Snapshot     `json:"snapshot"`
+	Route             RouteResult  `json:"route"`
+	NetworkDelta      NetworkDelta `json:"network_delta"`
+	VisibleSatellites []string     `json:"visible_satellites"`
 }
 
 type ExportRunRequest struct {
@@ -103,9 +112,11 @@ type ExportDocument struct {
 }
 
 type ExportRoute struct {
-	TS       int      `json:"t_s"`
-	ClientID string   `json:"client_id"`
-	Path     []string `json:"path"`
+	TS       int       `json:"t_s"`
+	ClientID string    `json:"client_id"`
+	Path     []string  `json:"path"`
+	Reason   GapReason `json:"reason,omitempty"`
+	Hops     int       `json:"hops,omitempty"`
 }
 
 type CompareRunsRequest struct {
@@ -133,6 +144,7 @@ type CompareVariant struct {
 	ClientsTotal         int             `json:"clients_total"`
 	MeanPathRatio        float64         `json:"mean_path_ratio"`
 	MeanMaxGapS          float64         `json:"mean_max_gap_s"`
+	MeanHops             float64         `json:"mean_hops"`
 	Metrics              []ClientMetrics `json:"metrics"`
 	Summary              string          `json:"summary,omitempty"`
 }

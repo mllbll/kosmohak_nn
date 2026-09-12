@@ -1,6 +1,8 @@
 package run
 
 import (
+	"encoding/json"
+
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/mllbll/kosmohak_nn/internal/model"
 )
@@ -42,4 +44,32 @@ func (s *ServiceSuite) TestExportNotFoundError() {
 	s.Require().Error(err)
 	s.Require().Equal(err, model.ErrRunNotFound)
 	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestExportMarshalsEmptyPathAndGaps() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+	)
+	run.Routes = []model.RouteRecord{
+		{TS: 0, ClientID: "C65", Path: nil, Reason: model.GapISLPartition},
+	}
+	run.Metrics[0].Gaps = nil
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+
+	res, err := s.service.Export(s.ctx, model.ExportRunRequest{RunID: run.ID})
+
+	s.Require().NoError(err)
+	s.Require().Equal([]string{}, res.Routes[0].Path)
+	s.Require().Equal(model.GapISLPartition, res.Routes[0].Reason)
+	s.Require().NotNil(res.Metrics[0].Gaps)
+
+	raw, err := json.Marshal(res)
+	s.Require().NoError(err)
+	s.Require().Contains(string(raw), `"path":[]`)
+	s.Require().Contains(string(raw), `"reason":"isl_partition"`)
+	s.Require().Contains(string(raw), `"gaps":[]`)
+	s.Require().NotContains(string(raw), `"path":null`)
+	s.Require().NotContains(string(raw), `"failures":null`)
 }

@@ -26,6 +26,7 @@ func (s *ServiceSuite) TestCreateSuccess() {
 
 	s.Require().NoError(err)
 	s.Require().NotEmpty(res.Project.ID)
+	s.Require().NotEqual(sc.Meta.ID, res.Project.ID)
 	s.Require().Equal(sc.Meta.Title, res.Project.Effective.Meta.Title)
 }
 

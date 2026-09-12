@@ -70,3 +70,43 @@ func (s *APISuite) TestCreateError() {
 
 	s.Require().Equal(http.StatusInternalServerError, rec.Code)
 }
+
+func (s *APISuite) TestCreateFromExportSuccess() {
+	var (
+		sc  = testScenario()
+		doc = model.ExportDocument{
+			SchemaVersion:     model.ResultSchemaVersion,
+			EffectiveScenario: sc,
+			Routes: []model.ExportRoute{
+				{TS: 0, ClientID: "C65", Path: []string{}},
+			},
+		}
+		project = model.Project{
+			ID:        gofakeit.UUID(),
+			Base:      sc,
+			Effective: sc,
+		}
+	)
+
+	s.projectService.On("Create", mock.Anything, model.CreateProjectRequest{Scenario: sc}).Return(
+		model.CreateProjectResponse{Project: project}, nil,
+	)
+
+	rec, req := s.newRequest(http.MethodPost, "/api/projects", "", doc)
+	s.api.Create(rec, req)
+
+	s.Require().Equal(http.StatusCreated, rec.Code)
+}
+
+func (s *APISuite) TestCreateFromExportMissingScenario() {
+	doc := map[string]any{
+		"schema_version": model.ResultSchemaVersion,
+		"routes":         []any{},
+	}
+
+	rec, req := s.newRequest(http.MethodPost, "/api/projects", "", doc)
+	s.api.Create(rec, req)
+
+	s.Require().Equal(http.StatusBadRequest, rec.Code)
+	s.projectService.AssertNotCalled(s.T(), "Create")
+}

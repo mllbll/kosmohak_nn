@@ -27,22 +27,52 @@ func Aggregate(sc model.Scenario, routes []model.RouteRecord, visible map[int]ma
 		hopsSum := 0
 		streak := 0
 		maxStreak := 0
-		for _, t := range grid {
+		gaps := make([]model.GapInterval, 0)
+		gapStart := -1
+		reasonCnt := map[model.GapReason]int{}
+
+		flushGap := func(endIdx int) {
+			if gapStart < 0 || endIdx <= gapStart {
+				return
+			}
+			startT := grid[gapStart]
+			endT := grid[endIdx-1] + sc.Environment.StepS
+			steps := endIdx - gapStart
+			gaps = append(gaps, model.GapInterval{
+				StartS:    startT,
+				EndS:      endT,
+				DurationS: steps * sc.Environment.StepS,
+				Reason:    dominantReasonCount(reasonCnt),
+			})
+			gapStart = -1
+			reasonCnt = map[model.GapReason]int{}
+		}
+
+		for i, t := range grid {
 			if visible[t][id] {
 				vis++
 			}
 			rec, has := recs[t]
 			if has && len(rec.Path) > 0 {
+				flushGap(i)
 				ok++
 				hopsSum += rec.Hops
 				streak = 0
 				continue
+			}
+			if gapStart < 0 {
+				gapStart = i
+			}
+			if rec.Reason != model.GapNone {
+				reasonCnt[rec.Reason]++
 			}
 			streak++
 			if streak > maxStreak {
 				maxStreak = streak
 			}
 		}
+		flushGap(len(grid))
+
 		mean := 0.0
 		if ok > 0 {
 			mean = float64(hopsSum) / float64(ok)
@@ -55,7 +85,29 @@ func Aggregate(sc model.Scenario, routes []model.RouteRecord, visible map[int]ma
 			MaxGapS:         maxStreak * sc.Environment.StepS,
 			MeanHops:        mean,
 			MeetsTarget:     pathRatio >= sc.Environment.TargetAvailability,
+			Gaps:            gaps,
 		})
 	}
 	return out
+}
+
+func cloneClientMetrics(in []model.ClientMetrics) []model.ClientMetrics {
+	out := make([]model.ClientMetrics, len(in))
+	for i, m := range in {
+		m.Gaps = append([]model.GapInterval{}, m.Gaps...)
+		out[i] = m
+	}
+	return out
+}
+
+func dominantReasonCount(counts map[model.GapReason]int) model.GapReason {
+	var best model.GapReason
+	bestN := 0
+	for reason, n := range counts {
+		if n > bestN {
+			best = reason
+			bestN = n
+		}
+	}
+	return best
 }

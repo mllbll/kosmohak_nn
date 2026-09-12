@@ -146,3 +146,63 @@ func (s *ServiceSuite) TestCreateRepositoryError() {
 	s.Require().Equal(err, repoErr)
 	s.Require().Empty(res)
 }
+
+func (s *ServiceSuite) TestCreateRejectsMissingSnapshots() {
+	var (
+		projectID = gofakeit.UUID()
+		sc        = testScenario()
+
+		createRunRequest = model.CreateRunRequest{
+			ProjectID: projectID,
+		}
+
+		project = model.Project{
+			ID:        projectID,
+			Base:      sc,
+			Effective: sc,
+		}
+	)
+
+	s.projectRepository.On("Get", s.ctx, projectID).Return(project, nil)
+	s.geometryClient.On("WalkSnapshots", s.ctx, mock.Anything, mock.Anything).Return(nil)
+	s.runRepository.AssertNotCalled(s.T(), "Create")
+
+	res, err := s.service.Create(s.ctx, createRunRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrGeometryFailed)
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestCreateRejectsWrongSnapshotTime() {
+	var (
+		projectID = gofakeit.UUID()
+		sc        = testScenario()
+
+		createRunRequest = model.CreateRunRequest{
+			ProjectID: projectID,
+		}
+
+		project = model.Project{
+			ID:        projectID,
+			Base:      sc,
+			Effective: sc,
+		}
+	)
+
+	s.projectRepository.On("Get", s.ctx, projectID).Return(project, nil)
+	s.geometryClient.On("WalkSnapshots", s.ctx, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		fn := args.Get(2).(func(model.Snapshot) error)
+		bad := testSnapshot()
+		bad.TS = 99
+		_ = fn(bad)
+	}).Return(nil)
+	s.runRepository.AssertNotCalled(s.T(), "Create")
+
+	res, err := s.service.Create(s.ctx, createRunRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrGeometryFailed)
+	s.Require().Contains(err.Error(), "expected")
+	s.Require().Empty(res)
+}

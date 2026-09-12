@@ -27,6 +27,42 @@ func (s *ServiceSuite) TestRouteFindsMinHopPath() {
 	s.Require().Equal("bfs_min_hops", res.Algorithm.Name)
 }
 
+func (s *ServiceSuite) TestRouteGatewayOutageIgnoresStaleEdge() {
+	sc := sampleScenario()
+	sc.GatewayOutages = []model.GatewayOutage{{GatewayID: "G_MUR", StartS: 0, EndS: 120}}
+	snap := model.Snapshot{
+		TS:         0,
+		Satellites: []model.SatState{{ID: "S1", Active: true}},
+		Edges: []model.Edge{
+			{A: "C65", B: "S1", DistanceKM: 100},
+			{A: "S1", B: "G_MUR", DistanceKM: 100},
+		},
+	}
+
+	res := Route(sc, snap, "C65")
+	s.Require().Empty(res.Path)
+	s.Require().Equal(model.GapGatewayOutage, res.Reason)
+}
+
+func (s *ServiceSuite) TestRouteUsesLiveGatewayWhenOtherOutaged() {
+	sc := sampleScenario()
+	sc.GroundSites = append(sc.GroundSites, model.GroundSite{ID: "G2", Role: "gateway"})
+	sc.GatewayOutages = []model.GatewayOutage{{GatewayID: "G_MUR", StartS: 0, EndS: 120}}
+	snap := model.Snapshot{
+		TS:         0,
+		Satellites: []model.SatState{{ID: "S1", Active: true}},
+		Edges: []model.Edge{
+			{A: "C65", B: "S1", DistanceKM: 100},
+			{A: "S1", B: "G_MUR", DistanceKM: 100},
+			{A: "S1", B: "G2", DistanceKM: 100},
+		},
+	}
+
+	res := Route(sc, snap, "C65")
+	s.Require().Equal([]string{"C65", "S1", "G2"}, res.Path)
+	s.Require().Empty(res.Reason)
+}
+
 func (s *ServiceSuite) TestRouteCollectsAlternateMinHopPaths() {
 	sc := sampleScenario()
 	snap := model.Snapshot{
@@ -124,6 +160,22 @@ func (s *ServiceSuite) TestGroundDoesNotRelay() {
 	res := Route(sc, snap, "C65")
 	s.Require().Empty(res.Path)
 	s.Require().Equal(model.GapNoGatewayContact, res.Reason)
+}
+
+func (s *ServiceSuite) TestRouteIgnoresInactiveSatellite() {
+	sc := sampleScenario()
+	snap := model.Snapshot{
+		TS:         0,
+		Satellites: []model.SatState{{ID: "S1", Active: false}},
+		Edges: []model.Edge{
+			{A: "C65", B: "S1", DistanceKM: 100},
+			{A: "S1", B: "G_MUR", DistanceKM: 100},
+		},
+	}
+
+	res := Route(sc, snap, "C65")
+	s.Require().Empty(res.Path)
+	s.Require().Equal(model.GapNoVisibleSat, res.Reason)
 }
 
 func sampleScenario() model.Scenario {

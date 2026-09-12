@@ -54,6 +54,11 @@ func (s *ServiceSuite) TestCompareSuccess() {
 	s.Require().Contains(strings.Join(res.Recommendation.Advantages, "\n"), "C65")
 	s.Require().Contains(res.Recommendation.Conditions[0], "90")
 	s.Require().Contains(res.Recommendation.Conclusion, "этап 3")
+	stage, ok := res.Config["launch_stage"].(map[string]int)
+	s.Require().True(ok)
+	s.Require().Equal(3, stage["a"])
+	s.Require().Equal(1, stage["b"])
+	s.Require().Equal(2.0, res.Variants[0].MeanHops)
 
 	raw, err := json.Marshal(res.Clients[0])
 	s.Require().NoError(err)

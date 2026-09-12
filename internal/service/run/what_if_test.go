@@ -54,6 +54,9 @@ func (s *ServiceSuite) TestWhatIfSuccess() {
 	s.Require().Equal("S01", res.FailedSatelliteID)
 	s.Require().Equal(original.ID, res.Compare.RunAID)
 	s.Require().Equal(res.RunID, res.Compare.RunBID)
+	s.Require().Equal("a", res.Compare.Recommendation.Better)
+	s.Require().Equal(original.ID, res.Compare.Recommendation.RunID)
+	s.Require().NotContains(res.Compare.Recommendation.Conclusion, "нет единственного победителя")
 	s.Require().NotEmpty(res.Analysis.Clients)
 	s.Require().NotEmpty(res.Analysis.Summary)
 	s.Require().NotEmpty(res.Analysis.Mitigations)
@@ -204,6 +207,30 @@ func (s *ServiceSuite) TestWhatIfInvalidArgument() {
 
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestWhatIfUnknownClient() {
+	var (
+		projectID = gofakeit.UUID()
+		original  = testRun(projectID)
+
+		whatIfRequest = model.WhatIfRequest{
+			RunID:    original.ID,
+			ClientID: "UNKNOWN",
+			TS:       0,
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, original.ID).Return(original, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+	s.projectRepository.AssertNotCalled(s.T(), "Create")
+
+	res, err := s.service.WhatIf(s.ctx, whatIfRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Contains(err.Error(), "unknown client")
 	s.Require().Empty(res)
 }
 

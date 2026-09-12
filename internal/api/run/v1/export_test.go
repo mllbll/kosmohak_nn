@@ -34,6 +34,7 @@ func (s *APISuite) TestExportSuccess() {
 	s.api.Export(rec, req)
 
 	s.Require().Equal(http.StatusOK, rec.Code)
+	s.Require().Equal(`attachment; filename="cosmo-A-result.json"`, rec.Header().Get("Content-Disposition"))
 
 	var got model.ExportDocument
 	s.Require().NoError(json.NewDecoder(rec.Body).Decode(&got))

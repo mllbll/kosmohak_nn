@@ -22,14 +22,16 @@ func (s *service) Export(ctx context.Context, req model.ExportRunRequest) (model
 			TS:       r.TS,
 			ClientID: r.ClientID,
 			Path:     path,
+			Reason:   r.Reason,
+			Hops:     r.Hops,
 		})
 	}
 
 	return model.ExportDocument{
 		SchemaVersion:     model.ResultSchemaVersion,
-		EffectiveScenario: run.EffectiveScenario,
+		EffectiveScenario: model.CloneScenario(run.EffectiveScenario),
 		Routes:            routes,
-		Metrics:           run.Metrics,
+		Metrics:           cloneClientMetrics(run.Metrics),
 		Summary:           run.Summary,
 	}, nil
 }

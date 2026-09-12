@@ -27,6 +27,7 @@ func (s *ServiceSuite) TestGetSnapshotSuccess() {
 	s.Require().NoError(err)
 	s.Require().Equal(snap, res.Snapshot)
 	s.Require().Equal([]string{"C65", "S01", "G_MUR"}, res.Route.Path)
+	s.Require().Equal([]string{"S01"}, res.VisibleSatellites)
 	s.Require().Equal("bfs_min_hops", res.Route.Algorithm.Name)
 	s.Require().NotEmpty(res.Route.Algorithm.Rationale)
 	s.Require().NotEmpty(res.NetworkDelta.Explanation)
@@ -66,6 +67,31 @@ func (s *ServiceSuite) TestGetSnapshotRebuildsBrokenPath() {
 	s.Require().True(res.NetworkDelta.Changed)
 	s.Require().False(res.NetworkDelta.PreviousStillValid)
 	s.Require().Contains(res.NetworkDelta.Explanation, "перестроен")
+}
+
+func (s *ServiceSuite) TestGetSnapshotOffGridUsesPreviousStep() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+		snap      = testSnapshot()
+
+		getSnapshotRequest = model.GetSnapshotRequest{
+			RunID:    run.ID,
+			TS:       60,
+			ClientID: "C65",
+		}
+	)
+	snap.TS = 60
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+	s.geometryClient.On("Snapshot", s.ctx, mock.Anything, float64(60)).Return(snap, nil)
+
+	res, err := s.service.GetSnapshot(s.ctx, getSnapshotRequest)
+
+	s.Require().NoError(err)
+	s.Require().Equal([]string{"C65", "S01", "G_MUR"}, res.NetworkDelta.PreviousPath)
+	s.Require().True(res.NetworkDelta.PreviousStillValid)
+	s.Require().Equal([]string{"S01"}, res.VisibleSatellites)
 }
 
 func (s *ServiceSuite) TestGetSnapshotNotFoundError() {
@@ -137,6 +163,28 @@ func (s *ServiceSuite) TestGetSnapshotInvalidTime() {
 		getSnapshotRequest = model.GetSnapshotRequest{
 			RunID:    run.ID,
 			TS:       99999,
+			ClientID: "C65",
+		}
+	)
+
+	s.runRepository.On("Get", s.ctx, run.ID).Return(run, nil)
+	s.geometryClient.AssertNotCalled(s.T(), "Snapshot")
+
+	res, err := s.service.GetSnapshot(s.ctx, getSnapshotRequest)
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestGetSnapshotNegativeTime() {
+	var (
+		projectID = gofakeit.UUID()
+		run       = testRun(projectID)
+
+		getSnapshotRequest = model.GetSnapshotRequest{
+			RunID:    run.ID,
+			TS:       -1,
 			ClientID: "C65",
 		}
 	)

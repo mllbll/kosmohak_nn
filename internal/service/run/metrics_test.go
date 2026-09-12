@@ -24,6 +24,36 @@ func (s *ServiceSuite) TestAggregateUsesTimeGridForGaps() {
 	s.Require().Equal(120, got[0].MaxGapS)
 	s.Require().InDelta(2.0/3.0, got[0].VisibilityRatio, 1e-9)
 	s.Require().False(got[0].MeetsTarget)
+	s.Require().Equal([]model.GapInterval{{
+		StartS:    120,
+		EndS:      240,
+		DurationS: 120,
+	}}, got[0].Gaps)
+}
+
+func (s *ServiceSuite) TestAggregateDoesNotWrapStartAndEndGaps() {
+	sc := testScenario()
+	sc.Environment.HorizonS = 360
+	sc.Environment.StepS = 120
+
+	routes := []model.RouteRecord{
+		{TS: 120, ClientID: "C65", Path: []string{"C65", "S01", "G_MUR"}, Hops: 2},
+	}
+	visible := map[int]map[string]bool{
+		0:   {"C65": true},
+		120: {"C65": true},
+		240: {"C65": true},
+	}
+
+	got := Aggregate(sc, routes, visible)
+
+	s.Require().Equal(1.0/3.0, got[0].PathRatio)
+	s.Require().Equal(120, got[0].MaxGapS)
+	s.Require().Len(got[0].Gaps, 2)
+	s.Require().Equal(0, got[0].Gaps[0].StartS)
+	s.Require().Equal(120, got[0].Gaps[0].EndS)
+	s.Require().Equal(240, got[0].Gaps[1].StartS)
+	s.Require().Equal(360, got[0].Gaps[1].EndS)
 }
 
 func (s *ServiceSuite) TestAggregateMissingStepCountsAsGap() {

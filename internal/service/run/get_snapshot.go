@@ -38,9 +38,10 @@ func (s *service) GetSnapshot(ctx context.Context, req model.GetSnapshotRequest)
 	route := Route(run.EffectiveScenario, snap, clientID)
 	prev, prevFound := previousRoute(run, clientID, req.TS)
 	return model.GetSnapshotResponse{
-		Snapshot:     snap,
-		Route:        route,
-		NetworkDelta: networkDelta(run.EffectiveScenario, snap, prev, prevFound, route),
+		Snapshot:          snap,
+		Route:             route,
+		NetworkDelta:      networkDelta(run.EffectiveScenario, snap, prev, prevFound, route),
+		VisibleSatellites: visibleSatelliteIDs(run.EffectiveScenario, snap, clientID),
 	}, nil
 }
 
@@ -54,18 +55,18 @@ func hasClient(ids []string, id string) bool {
 }
 
 func previousRoute(run model.Run, clientID string, ts float64) ([]string, bool) {
-	step := run.EffectiveScenario.Environment.StepS
-	if step <= 0 {
-		return nil, false
-	}
-	prevT := int(ts) - step
-	if prevT < 0 {
-		return nil, false
-	}
+	bestT := -1
+	found := false
+	var path []string
 	for _, rec := range run.Routes {
-		if rec.ClientID == clientID && rec.TS == prevT {
-			return rec.Path, true
+		if rec.ClientID != clientID || float64(rec.TS) >= ts {
+			continue
+		}
+		if !found || rec.TS >= bestT {
+			bestT = rec.TS
+			path = rec.Path
+			found = true
 		}
 	}
-	return nil, false
+	return copyPath(path), found
 }

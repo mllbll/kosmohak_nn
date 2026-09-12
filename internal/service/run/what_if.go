@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mllbll/kosmohak_nn/internal/model"
+	projectsvc "github.com/mllbll/kosmohak_nn/internal/service/project"
 )
 
 func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.WhatIfResponse, error) {
@@ -48,6 +49,9 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 		})
 	}
 
+	if err := projectsvc.ValidateScenario(effective); err != nil {
+		return model.WhatIfResponse{}, err
+	}
 	if _, err := s.geometryClient.Snapshot(ctx, effective, 0); err != nil {
 		return model.WhatIfResponse{}, err
 	}
@@ -76,9 +80,7 @@ func (s *service) WhatIf(ctx context.Context, req model.WhatIfRequest) (model.Wh
 	if err != nil {
 		return model.WhatIfResponse{}, err
 	}
-	cmp.Recommendation.Limitations = append([]string{
-		"run_b — прогон с искусственным отказом, а не альтернативная конструкция группировки",
-	}, cmp.Recommendation.Limitations...)
+	cmp = annotateWhatIfCompare(cmp, original)
 
 	return model.WhatIfResponse{
 		OriginalRunID:     original.ID,
@@ -119,13 +121,15 @@ func resolveFailure(run model.Run, req model.WhatIfRequest) (string, string, err
 }
 
 func resolveFailedSatellite(run model.Run, req model.WhatIfRequest) (string, error) {
+	ids := run.EffectiveScenario.ClientIDs()
 	clientID := req.ClientID
 	if clientID == "" {
-		ids := run.EffectiveScenario.ClientIDs()
 		if len(ids) == 0 {
 			return "", fmt.Errorf("%w: client_id required", model.ErrInvalidArgument)
 		}
 		clientID = ids[0]
+	} else if !hasClient(ids, clientID) {
+		return "", fmt.Errorf("%w: unknown client %q", model.ErrInvalidArgument, clientID)
 	}
 
 	t := int(req.TS)
@@ -171,4 +175,35 @@ func satelliteFromPath(sc model.Scenario, path []string) string {
 		}
 	}
 	return ""
+}
+
+func annotateWhatIfCompare(cmp model.CompareRunsResponse, original model.Run) model.CompareRunsResponse {
+	const caveat = "run_b — прогон с искусственным отказом, а не альтернативная конструкция группировки"
+	if len(cmp.Recommendation.Limitations) == 0 || cmp.Recommendation.Limitations[0] != caveat {
+		cmp.Recommendation.Limitations = append([]string{caveat}, cmp.Recommendation.Limitations...)
+	}
+
+	origMean, failMean := 0.0, 0.0
+	origMeet, failMeet := 0, 0
+	if len(cmp.Variants) >= 2 {
+		origMean = cmp.Variants[0].MeanPathRatio
+		failMean = cmp.Variants[1].MeanPathRatio
+		origMeet = cmp.Variants[0].ClientsMeetingTarget
+		failMeet = cmp.Variants[1].ClientsMeetingTarget
+	}
+
+	cmp.Recommendation.Better = "a"
+	cmp.Recommendation.RunID = original.ID
+	if origMean > failMean+1e-12 || origMeet > failMeet {
+		cmp.Recommendation.Reason = fmt.Sprintf(
+			"Рабочая конфигурация — исходный прогон: после отказа средняя доступность пути %.0f%% → %.0f%%",
+			origMean*100, failMean*100,
+		)
+		cmp.Recommendation.Conclusion = "Итог: не выбирать run_b как лучший конфиг. Это what-if с искусственным отказом, исходный вариант устойчивее. Ограничение: " + caveat
+		return cmp
+	}
+
+	cmp.Recommendation.Reason = "Отказ не ухудшил доступность: запасной маршрут сработал. run_b всё равно не конкурирующая конструкция"
+	cmp.Recommendation.Conclusion = "Итог: исходная конфигурация остаётся рабочей; what-if подтвердил устойчивость к этому отказу, а не предложил новый дизайн. Ограничение: " + caveat
+	return cmp
 }

@@ -67,19 +67,23 @@ func toCompareVariant(run model.Run) model.CompareVariant {
 	meeting := 0
 	pathSum := 0.0
 	gapSum := 0.0
+	hopsSum := 0.0
 	for _, m := range run.Metrics {
 		if m.MeetsTarget {
 			meeting++
 		}
 		pathSum += m.PathRatio
 		gapSum += float64(m.MaxGapS)
+		hopsSum += m.MeanHops
 	}
 	n := float64(len(run.Metrics))
 	meanPath := 0.0
 	meanGap := 0.0
+	meanHops := 0.0
 	if n > 0 {
 		meanPath = pathSum / n
 		meanGap = gapSum / n
+		meanHops = hopsSum / n
 	}
 
 	return model.CompareVariant{
@@ -92,7 +96,8 @@ func toCompareVariant(run model.Run) model.CompareVariant {
 		ClientsTotal:         len(run.Metrics),
 		MeanPathRatio:        meanPath,
 		MeanMaxGapS:          meanGap,
-		Metrics:              append([]model.ClientMetrics{}, run.Metrics...),
+		MeanHops:             meanHops,
+		Metrics:              cloneClientMetrics(run.Metrics),
 		Summary:              run.Summary,
 	}
 }
@@ -249,11 +254,36 @@ func configDiff(a, b model.Scenario) map[string]any {
 	if a.Design.LaunchStage != b.Design.LaunchStage {
 		diff["launch_stage"] = map[string]int{"a": a.Design.LaunchStage, "b": b.Design.LaunchStage}
 	}
-	if a.Environment.ISLRangeKM != b.Environment.ISLRangeKM {
-		diff["isl_range_km"] = map[string]float64{"a": a.Environment.ISLRangeKM, "b": b.Environment.ISLRangeKM}
+
+	envKeys := []struct {
+		name string
+		av   float64
+		bv   float64
+	}{
+		{"altitude_km", a.Environment.AltitudeKM, b.Environment.AltitudeKM},
+		{"inclination_deg", a.Environment.InclinationDeg, b.Environment.InclinationDeg},
+		{"earth_angle0_deg", a.Environment.EarthAngle0Deg, b.Environment.EarthAngle0Deg},
+		{"min_elevation_deg", a.Environment.MinElevationDeg, b.Environment.MinElevationDeg},
+		{"isl_range_km", a.Environment.ISLRangeKM, b.Environment.ISLRangeKM},
+		{"target_availability", a.Environment.TargetAvailability, b.Environment.TargetAvailability},
 	}
-	if len(a.Failures) != len(b.Failures) {
-		diff["failures_count"] = map[string]int{"a": len(a.Failures), "b": len(b.Failures)}
+	for _, key := range envKeys {
+		if key.av != key.bv {
+			diff[key.name] = map[string]float64{"a": key.av, "b": key.bv}
+		}
+	}
+	if a.Environment.HorizonS != b.Environment.HorizonS {
+		diff["horizon_s"] = map[string]int{"a": a.Environment.HorizonS, "b": b.Environment.HorizonS}
+	}
+	if a.Environment.StepS != b.Environment.StepS {
+		diff["step_s"] = map[string]int{"a": a.Environment.StepS, "b": b.Environment.StepS}
+	}
+
+	if !sameFailures(a.Failures, b.Failures) {
+		diff["failures"] = map[string]any{"a": a.Failures, "b": b.Failures}
+	}
+	if !sameOutages(a.GatewayOutages, b.GatewayOutages) {
+		diff["gateway_outages"] = map[string]any{"a": a.GatewayOutages, "b": b.GatewayOutages}
 	}
 
 	planes := []map[string]any{}
@@ -278,4 +308,28 @@ func configDiff(a, b model.Scenario) map[string]any {
 		diff["planes"] = planes
 	}
 	return diff
+}
+
+func sameFailures(a, b []model.Failure) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameOutages(a, b []model.GatewayOutage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

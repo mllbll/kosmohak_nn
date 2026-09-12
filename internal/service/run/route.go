@@ -25,6 +25,9 @@ func Route(sc model.Scenario, snap model.Snapshot, clientID string) model.RouteR
 	}
 	gatewayHasDownlink := false
 	for gw := range g.gateways {
+		if _, down := g.outagedGW[gw]; down {
+			continue
+		}
 		for _, nb := range g.adj[gw] {
 			if _, ok := g.sats[nb]; ok {
 				gatewayHasDownlink = true
@@ -83,22 +86,27 @@ func routeAlgorithm() model.RouteAlgorithm {
 }
 
 type routeGraph struct {
-	adj      map[string][]string
-	sats     map[string]struct{}
-	gateways map[string]struct{}
-	clients  map[string]struct{}
+	adj       map[string][]string
+	sats      map[string]struct{}
+	gateways  map[string]struct{}
+	clients   map[string]struct{}
+	outagedGW map[string]struct{}
 }
 
 func buildRouteGraph(sc model.Scenario, snap model.Snapshot) routeGraph {
 	g := routeGraph{
-		adj:      map[string][]string{},
-		sats:     map[string]struct{}{},
-		gateways: map[string]struct{}{},
-		clients:  map[string]struct{}{},
+		adj:       map[string][]string{},
+		sats:      map[string]struct{}{},
+		gateways:  map[string]struct{}{},
+		clients:   map[string]struct{}{},
+		outagedGW: map[string]struct{}{},
 	}
 	for _, site := range sc.GroundSites {
 		if site.Role == "gateway" {
 			g.gateways[site.ID] = struct{}{}
+			if sc.IsGatewayOutaged(site.ID, snap.TS) {
+				g.outagedGW[site.ID] = struct{}{}
+			}
 		}
 		if site.Role == "client" {
 			g.clients[site.ID] = struct{}{}
@@ -128,6 +136,11 @@ func allowedHop(from, to string, g routeGraph) bool {
 
 	if toClient {
 		return false
+	}
+	if toGateway {
+		if _, down := g.outagedGW[to]; down {
+			return false
+		}
 	}
 	if fromClient {
 		return toSat

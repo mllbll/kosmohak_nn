@@ -1,6 +1,10 @@
 package run
 
-import "github.com/mllbll/kosmohak_nn/internal/model"
+import (
+	"sort"
+
+	"github.com/mllbll/kosmohak_nn/internal/model"
+)
 
 func clientVisible(sc model.Scenario, snap model.Snapshot, clientID string) bool {
 	elev, ok := snap.ElevationDeg[clientID]
@@ -35,6 +39,37 @@ func hasUplink(snap model.Snapshot, clientID string) bool {
 		}
 	}
 	return false
+}
+
+func visibleSatelliteIDs(sc model.Scenario, snap model.Snapshot, clientID string) []string {
+	seen := map[string]struct{}{}
+	minEl := sc.Environment.MinElevationDeg
+	if elev, ok := snap.ElevationDeg[clientID]; ok {
+		for satID, el := range elev {
+			if el >= minEl && satelliteActive(snap, satID) {
+				seen[satID] = struct{}{}
+			}
+		}
+	} else {
+		for _, e := range snap.Edges {
+			other := ""
+			switch clientID {
+			case e.A:
+				other = e.B
+			case e.B:
+				other = e.A
+			}
+			if other != "" && satelliteActive(snap, other) {
+				seen[other] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func islEdgeCount(snap model.Snapshot, satIDs map[string]struct{}) int {

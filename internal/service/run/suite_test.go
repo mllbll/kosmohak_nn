@@ -103,7 +103,7 @@ func testRun(projectID string) model.Run {
 			{TS: 0, ClientID: "C65", Path: []string{"C65", "S01", "G_MUR"}, Hops: 2},
 		},
 		Metrics: []model.ClientMetrics{
-			{ClientID: "C65", PathRatio: 1, VisibilityRatio: 1, MeetsTarget: true},
+			{ClientID: "C65", PathRatio: 1, VisibilityRatio: 1, MeanHops: 2, MeetsTarget: true, Gaps: []model.GapInterval{}},
 		},
 	}
 }

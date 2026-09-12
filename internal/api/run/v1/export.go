@@ -17,5 +17,6 @@ func (a *api) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Disposition", `attachment; filename="cosmo-A-result.json"`)
 	apiresp.WriteJSON(w, http.StatusOK, resp)
 }

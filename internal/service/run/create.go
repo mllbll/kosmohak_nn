@@ -45,10 +45,10 @@ func (s *service) execute(ctx context.Context, projectID string, sc model.Scenar
 		if step >= len(grid) {
 			return fmt.Errorf("%w: extra snapshot at t_s=%g", model.ErrGeometryFailed, snap.TS)
 		}
-		t := int(snap.TS)
-		if t != grid[step] {
-			return fmt.Errorf("%w: snapshot t_s=%d, expected %d", model.ErrGeometryFailed, t, grid[step])
+		if snap.TS != float64(grid[step]) {
+			return fmt.Errorf("%w: snapshot t_s=%g, expected %d", model.ErrGeometryFailed, snap.TS, grid[step])
 		}
+		t := grid[step]
 		step++
 
 		visible[t] = map[string]bool{}

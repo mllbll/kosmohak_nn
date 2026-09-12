@@ -70,6 +70,30 @@ func (s *FixtureSuite) TestOfficialFixturesFullDay() {
 	s.Require().Greater(mean01, mean02, "полная группировка должна быть доступнее первой очереди")
 	s.Require().Greater(mean01, mean03, "отказы спутников должны снижать доступность")
 	s.Require().GreaterOrEqual(mean01, mean04, "ISL 3000 км не должен быть хуже 2000 км")
+	s.InDelta(0.981, mean01, 0.02)
+	s.InDelta(0.186, mean02, 0.02)
+	s.InDelta(0.809, mean03, 0.02)
+	s.InDelta(0.683, mean04, 0.02)
+	for _, m := range runs["data/01_full_constellation.json"].Metrics {
+		s.True(m.MeetsTarget, m.ClientID)
+	}
+	for _, file := range []string{"data/02_first_launch.json", "data/03_satellite_outages.json"} {
+		for _, m := range runs[file].Metrics {
+			s.False(m.MeetsTarget, file+" "+m.ClientID)
+		}
+	}
+	hasISL := false
+	for _, rec := range runs["data/04_link_range.json"].Routes {
+		if rec.Reason == model.GapISLPartition {
+			hasISL = true
+			break
+		}
+	}
+	s.True(hasISL, "04_link_range должен показывать разрыв ISL")
+	for _, m := range runs["data/04_link_range.json"].Metrics {
+		s.GreaterOrEqual(m.VisibilityRatio, 0.97, m.ClientID)
+		s.Greater(m.VisibilityRatio, m.PathRatio, m.ClientID)
+	}
 
 	cmp, err := rs.Compare(s.ctx, model.CompareRunsRequest{
 		RunAID: ids["data/01_full_constellation.json"],
@@ -120,6 +144,7 @@ func (s *FixtureSuite) TestOfficialFixturesFullDay() {
 	})
 	s.Require().NoError(err)
 	s.Require().Equal("bfs_min_hops", snap.Route.Algorithm.Name)
+	s.Require().NotEmpty(snap.VisibleSatellites)
 	s.Require().NotEmpty(snap.NetworkDelta.Explanation)
 
 	satID := ""
@@ -140,6 +165,9 @@ func (s *FixtureSuite) TestOfficialFixturesFullDay() {
 	s.Require().NotEmpty(wi.Analysis.Summary)
 	s.Require().NotEmpty(wi.Analysis.Mitigations)
 	s.Require().Contains(wi.Compare.Recommendation.Limitations[0], "искусственным отказом")
+	s.Require().Equal("a", wi.Compare.Recommendation.Better)
+	s.Require().Equal(ids["data/01_full_constellation.json"], wi.Compare.Recommendation.RunID)
+	s.Require().NotContains(wi.Compare.Recommendation.Conclusion, "нет единственного победителя")
 }
 
 func (s *FixtureSuite) TestHTTPSmokeFixture01() {
@@ -157,6 +185,8 @@ func (s *FixtureSuite) TestHTTPSmokeFixture01() {
 	r.Post("/api/projects", projectAPI.Create)
 	r.Get("/api/projects/{id}", projectAPI.Get)
 	r.Patch("/api/projects/{id}", projectAPI.Patch)
+	r.Post("/api/projects/{id}/reset", projectAPI.Reset)
+	r.Post("/api/projects/{id}/copy", projectAPI.Copy)
 	r.Post("/api/projects/{id}/runs", runAPI.Create)
 	r.Get("/api/runs/{id}", runAPI.Get)
 	r.Get("/api/runs/{id}/metrics", runAPI.GetMetrics)
@@ -189,11 +219,18 @@ func (s *FixtureSuite) TestHTTPSmokeFixture01() {
 	snap := s.httpJSON(ts.URL, http.MethodGet, "/api/runs/"+runID+"/snapshot?t_s=0&client_id=C65", nil, http.StatusOK)
 	route := snap["route"].(map[string]any)
 	s.Require().NotEmpty(route["path"])
+	s.Require().NotEmpty(snap["visible_satellites"])
 
 	export := s.httpJSON(ts.URL, http.MethodGet, "/api/runs/"+runID+"/export", nil, http.StatusOK)
 	s.Require().Equal(model.ResultSchemaVersion, export["schema_version"])
+	reimported := s.httpJSON(ts.URL, http.MethodPost, "/api/projects", export, http.StatusCreated)
+	s.Require().NotEqual(projectID, reimported["id"])
 
 	s.httpJSON(ts.URL, http.MethodGet, "/api/runs/"+runID+"/snapshot?t_s=abc", nil, http.StatusBadRequest)
+	s.httpJSON(ts.URL, http.MethodPost, "/api/projects", map[string]any{"schema_version": "bad"}, http.StatusBadRequest)
+
+	copied := s.httpJSON(ts.URL, http.MethodPost, "/api/projects/"+projectID+"/copy", nil, http.StatusCreated)
+	s.Require().NotEqual(projectID, copied["id"])
 
 	stage := 1
 	s.httpJSON(ts.URL, http.MethodPatch, "/api/projects/"+projectID, model.Patch{LaunchStage: &stage}, http.StatusOK)
@@ -206,6 +243,13 @@ func (s *FixtureSuite) TestHTTPSmokeFixture01() {
 	}, http.StatusOK)
 	rec := cmp["recommendation"].(map[string]any)
 	s.Require().Equal("a", rec["better"])
+	cfg := cmp["config_diff"].(map[string]any)
+	s.Require().NotEmpty(cfg["launch_stage"])
+
+	reset := s.httpJSON(ts.URL, http.MethodPost, "/api/projects/"+projectID+"/reset", nil, http.StatusOK)
+	effective := reset["effective"].(map[string]any)
+	design := effective["design"].(map[string]any)
+	s.Require().Equal(float64(3), design["launch_stage"])
 
 	path := route["path"].([]any)
 	s.Require().GreaterOrEqual(len(path), 2)
@@ -214,6 +258,9 @@ func (s *FixtureSuite) TestHTTPSmokeFixture01() {
 		TS:          0,
 	}, http.StatusCreated)
 	s.Require().NotEmpty(wi["analysis"])
+	cmpWI := wi["compare"].(map[string]any)
+	recWI := cmpWI["recommendation"].(map[string]any)
+	s.Require().Equal("a", recWI["better"])
 }
 
 func (s *FixtureSuite) assertRunInvariants(run model.Run) {
@@ -302,6 +349,13 @@ func (s *FixtureSuite) assertRunInvariants(run model.Run) {
 		s.Require().InDelta(float64(ok)/float64(len(grid)), m.PathRatio, 1e-9, clientID)
 		s.Require().GreaterOrEqual(m.VisibilityRatio+1e-9, m.PathRatio, clientID)
 		s.Require().Equal(m.PathRatio >= sc.Environment.TargetAvailability, m.MeetsTarget, clientID)
+		maxGap := 0
+		for _, gap := range m.Gaps {
+			if gap.DurationS > maxGap {
+				maxGap = gap.DurationS
+			}
+		}
+		s.Require().Equal(m.MaxGapS, maxGap, clientID)
 	}
 }
 
