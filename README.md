@@ -4,7 +4,7 @@
 
 Целевой ориентир ТЗ: доступность сквозного пути **client → спутники → gateway ≥ 90%** для каждого наземного пункта. Наземные пункты не ретранслируют трафик.
 
-Контракт HTTP для фронтенда: [docs/frontend.md](docs/frontend.md). Деплой Docker: [docs/docker.md](docs/docker.md).
+Описание системы для заказчика (возможности, показатели, деплой, границы): [docs/backend.md](docs/backend.md). Контракт HTTP для фронтенда: [docs/frontend.md](docs/frontend.md). Экраны, localStorage, what-if / alternatives / explore: [docs/frontend-ui.md](docs/frontend-ui.md). TypeScript-клиент (скопировать в UI): [docs/frontend-client.ts](docs/frontend-client.ts). Деплой Docker: [docs/docker.md](docs/docker.md).
 
 ## Слои
 
@@ -50,10 +50,6 @@ make test
 docker compose up --build
 ```
 
-```bash
-docker compose up --build
-```
-
 Образ сам собирает Go-бинарник и кладёт рядом Python + NumPy + `geometry.py`. API: `http://localhost:8080`. Остановка: `Ctrl+C`, затем `docker compose down`.
 
 Только образ, без compose:
@@ -89,7 +85,7 @@ docker run --rm -p 8080:8080 kosmohak-nn
 
 ## API
 
-Полный контракт для фронтенда (схемы, статусы, примеры, потоки UI, фикстуры, чего нет): **[docs/frontend.md](docs/frontend.md)**.
+Что система умеет и как её развернуть — без кода: **[docs/backend.md](docs/backend.md)**. Полный контракт для фронтенда (схемы, статусы, примеры, потоки UI, фикстуры, чего нет): **[docs/frontend.md](docs/frontend.md)**. Как собрать экраны без догадок: **[docs/frontend-ui.md](docs/frontend-ui.md)**.
 
 | Метод | Путь |
 |---|---|

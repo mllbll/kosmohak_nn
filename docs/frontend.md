@@ -2,6 +2,8 @@
 
 Источник истины — текущий Go-код (`internal/app/app.go`, `internal/api/**`, `internal/model/**`, `internal/service/**`). Эндпоинтов, которых нет в таблице ниже, **нет**. Не вызывайте `python/geometry.py` из браузера: геометрию считает сервер.
 
+Экраны, localStorage, what-if / alternatives / explore: **[frontend-ui.md](frontend-ui.md)**. Готовый TypeScript-клиент: **[frontend-client.ts](frontend-client.ts)** (скопировать в проект UI, SPA в этом репозитории нет).
+
 База: `http://localhost:8080` (переменная `HTTP_ADDR`, по умолчанию `:8080`).
 
 ## 1. Запуск
@@ -49,13 +51,13 @@ make run
 
 | HTTP | Когда |
 |---|---|
-| 400 | невалидный JSON, query, сценарий, `t_s`, `client_id`, compare без двух id |
+| 400 | невалидный JSON, query, сценарий, `t_s`, `client_id`, compare без двух id или с разной сеткой `horizon_s`/`step_s` |
 | 404 | неизвестный `project` / `run` (`project not found` / `run not found`) |
 | 422 | сбой расчёта geometry.py / несовпадение сетки (`geometry calculation failed: ...`) |
 | 500 | прочее |
 | 504 | только если хендлер не успел записать ответ после дедлайна 5 мин; иначе чаще 422 |
 
-Часть сообщений 400 содержит путь поля (`planes[0].id is empty`, `unknown plane id "P9"`), часть — общая (`invalid orbit`, `invalid time grid`). Не завязывайтесь на парсинг текста сверх показа пользователю.
+Сообщения 400 валидации сценария содержат путь поля: `planes[0].id is empty`, `environment.altitude_km must be in [200, 1200]`, `environment.horizon_s must be a multiple of environment.step_s`, `environment.isl_range_km must be in (0, 10000]`. Не завязывайтесь на парсинг текста сверх показа пользователю.
 
 Python `ValueError`/`TypeError`/`KeyError`/`JSONDecodeError` приходят как **400**, остальные падения python — **422**.
 
@@ -66,6 +68,7 @@ Python `ValueError`/`TypeError`/`KeyError`/`JSONDecodeError` приходят к
 | `meets_target`, `meets_target_a/b`, `changed`, `previous_still_valid`, `active` | **всегда в JSON**, в том числе `false` |
 | `max_gap_s`, `mean_hops`, `path_ratio`, … | **всегда**, в том числе `0` |
 | `reason`, `hops`, `alternatives`, `min_hops` | `omitempty`: при успехе `reason` нет; при разрыве нет `hops` (это 0) |
+| `alt_count` | **всегда** в `routes[]` прогона, в том числе `0` (уникальный путь или разрыв) |
 | `previous_path` / `current_path` | `omitempty`: пустой путь **отсутствует**, не `[]` |
 | `config_diff`, `run_a_id`, `run_b_id` | только если сравнивают ровно 2 прогона; пустой diff может **пропасть** |
 | `recommendation.run_id` | нет при ничьей |
@@ -85,7 +88,8 @@ Python `ValueError`/`TypeError`/`KeyError`/`JSONDecodeError` приходят к
 | Снимок | `snapshot` | позиции КА и рёбра в момент `t_s` (выход geometry.py) |
 | Маршрут | `route` / `path` | BFS min hops: `client → спутники → gateway`. Земля **не** ретранслирует |
 | hops | `hops` | `len(path) - 1`; на валидном пути ≥ 2 |
-| alternatives | `alternatives` | другие пути той же длины (до 3) и +1 hop (до 2) |
+| alternatives | `alternatives` | другие пути той же длины (до 3) и +1 hop (до 2); только в `GET /snapshot` |
+| alt_count | `alt_count` | число запасных путей на шаге сетки в `GET /runs/{id}` (`routes[]`); **всегда** в JSON, в том числе `0`. Уникальный путь: `path.length > 0 && alt_count === 0` |
 | network_delta | `network_delta` | сравнение с **предыдущим шагом сетки** строго раньше `t_s` |
 | visible_satellites | `visible_satellites` | активные КА с возвышением ≥ `min_elevation_deg` у выбранного клиента |
 | path_ratio | `path_ratio` | доля шагов сетки с непустым путём |
@@ -125,7 +129,7 @@ Python `ValueError`/`TypeError`/`KeyError`/`JSONDecodeError` приходят к
 | `GET` | `/api/runs/{id}/snapshot` | 200 | query `t_s`, `client_id` |
 | `GET` | `/api/runs/{id}/export` | 200 | нет |
 | `POST` | `/api/runs/{id}/what-if` | **201** | `WhatIfRequest` |
-| `POST` | `/api/compare` | 200 | `run_a`+`run_b` или `run_ids` |
+| `POST` | `/api/compare` | 200 | `run_a`+`run_b` или `run_ids`; одинаковые `horizon_s`/`step_s`, иначе 400 |
 
 Других маршрутов нет (нет списка, удаления, логина, websocket, прогресса, PUT).
 
@@ -222,6 +226,8 @@ curl -s -X POST http://localhost:8080/api/projects \
 
 Плоскости и КА обязательны, id уникальны, id пункта не должен совпадать с id КА.
 
+Примеры текста 400 (после префикса `invalid argument: `): `environment.altitude_km must be in [200, 1200]`, `environment.inclination_deg must be in (0, 180]`, `environment.min_elevation_deg must be in [0, 90)`, `environment.isl_range_km must be in (0, 10000]`, `environment.target_availability must be in [0, 1]`, `environment.horizon_s must be a multiple of environment.step_s`, `planes[0].raan_deg must be in [0, 360)`.
+
 ### 7.2. Читать — `GET /api/projects/{id}` → 200
 
 Тот же `Project`. 404 если нет.
@@ -257,7 +263,7 @@ curl -s -X POST http://localhost:8080/api/projects \
 | неизвестный `planes[].id` | 400 `unknown plane id` |
 | нельзя добавить/удалить плоскость | **нет в API** |
 
-После патча сценарий заново валидируется и считается snapshot `t=0`. Неверные углы/stage — 400.
+После патча сценарий заново валидируется тем же `ValidateScenario` и считается snapshot `t=0`. Неверные углы/stage — 400 с путём поля (`planes[0].raan_deg must be in [0, 360)`, `launch_stage must be 1, 2 or 3`).
 
 `{}` валиден: пересчёт без изменений, 200.
 
@@ -317,8 +323,8 @@ curl -s -X POST http://localhost:8080/api/projects \
   "project_id": "3f2a0c1e-7b44-4c1a-9d2e-0a1b2c3d4e5f",
   "effective_scenario": {},
   "routes": [
-    { "t_s": 0, "client_id": "C65", "path": ["C65", "S01", "G_MUR"], "hops": 2 },
-    { "t_s": 120, "client_id": "C65", "path": [], "reason": "isl_partition" }
+    { "t_s": 0, "client_id": "C65", "path": ["C65", "S01", "G_MUR"], "hops": 2, "alt_count": 1 },
+    { "t_s": 120, "client_id": "C65", "path": [], "reason": "isl_partition", "alt_count": 0 }
   ],
   "metrics": [],
   "summary": "Все пункты достигают целевой доступности 90%"
@@ -326,6 +332,8 @@ curl -s -X POST http://localhost:8080/api/projects \
 ```
 
 Путь на разрыве — `[]`, не `null`. `hops` на разрыве нет. `path[0]` = клиент, последний узел = шлюз.
+
+`alt_count` — сколько **запасных** путей посчитано на этом шаге (те же hops, до 3, плюс +1 hop, до 2). Счётчик «путей на шаге» = `path.length ? 1 + alt_count : 0`. Сами массивы путей в `GET /runs` **нет** — геометрия запасных только в `GET /snapshot` (`route.alternatives`). Таймлайн «единственная точка отказа» строится по `alt_count`, без 720 snapshot.
 
 ### 8.3. Метрики — `GET /api/runs/{id}/metrics` → 200
 
@@ -478,7 +486,7 @@ Content-Disposition: attachment; filename="cosmo-A-result.json"
 }
 ```
 
-`path` никогда не `null`. `reason` только на разрыве. Повторная загрузка этого JSON в `POST /api/projects` создаёт **новый** проект из `effective_scenario`.
+`path` никогда не `null`. `reason` только на разрыве. Поля `alt_count` в выгрузке **нет** — оно только в `GET /runs`. Повторная загрузка этого JSON в `POST /api/projects` создаёт **новый** проект из `effective_scenario`.
 
 ---
 
@@ -494,7 +502,7 @@ Content-Disposition: attachment; filename="cosmo-A-result.json"
 { "run_ids": ["<uuid1>", "<uuid2>", "<uuid3>"] }
 ```
 
-Если `run_ids.length >= 2`, список **главнее** `run_a`/`run_b`. Один id или только `run_a` → 400 `two or more run ids required`. Неизвестный run → 404.
+Если `run_ids.length >= 2`, список **главнее** `run_a`/`run_b`. Один id или только `run_a` → 400 `two or more run ids required`. Неизвестный run → 404. Разные `horizon_s` или `step_s` у прогонов → 400 `runs have different time grids (horizon_s/step_s)`.
 
 Порядок в ответе = порядок во входе (`run_a` потом `run_b`, либо порядок `run_ids`).
 
@@ -566,7 +574,7 @@ Content-Disposition: attachment; filename="cosmo-A-result.json"
 
 `better` при двух прогонах: `"a"` | `"b"` | `"tie"`.
 
-`config_diff` ключи (только отличия): `launch_stage`, `altitude_km`, `inclination_deg`, `earth_angle0_deg`, `min_elevation_deg`, `isl_range_km`, `target_availability`, `horizon_s`, `step_s`, `failures`, `gateway_outages`, `planes`. Если конфиги совпали, поля `config_diff` может не быть.
+`config_diff` ключи (только отличия): `launch_stage`, `altitude_km`, `inclination_deg`, `earth_angle0_deg`, `min_elevation_deg`, `isl_range_km`, `target_availability`, `failures`, `gateway_outages`, `planes`. Различие `horizon_s`/`step_s` — 400 `runs have different time grids (horizon_s/step_s)`, не ключ diff. Если остальные конфиги совпали, поля `config_diff` может не быть.
 
 `delta_*` = **b − a**.
 
@@ -703,9 +711,27 @@ Content-Disposition: attachment; filename="cosmo-A-result.json"
 1. Селектор клиента (`C65` / `C70` / `C72`) и слайдер `t_s` по сетке (шаг `effective.environment.step_s`).
 2. `GET /snapshot?t_s=&client_id=`.
 3. Рёбра из `snapshot.edges`, КА из `satellites` (`active` = тусклый если false).
-4. Основной путь `route.path`, запасные `route.alternatives`.
+4. Основной путь `route.path`, запасные `route.alternatives` (полупрозрачные). Счётчик «путей на этом шаге: N» = `1 + (route.alternatives?.length ?? 0)` при непустом path.
 5. Подсветка `visible_satellites`.
 6. Баннер `network_delta.explanation`; не трактуйте `previous_still_valid=false` на первом шаге как аварию.
+7. Риски уникального пути — **не** из `/metrics`. После `GET /runs/{id}` покрасьте тики таймлайна, где `path.length > 0 && alt_count === 0`. Геометрию запасных рисуйте только с текущего snapshot.
+
+**Панель устойчивости (клик по КА на пути)**
+
+1. На карте кликабелен только `route.path[1 .. n-2]` (спутники, не клиент/шлюз).
+2. Интервал отказа: по умолчанию `[t_s, horizon_s]`; пользователь может сузить `start_s`/`end_s`.
+3. `POST /api/runs/{id}/what-if` с явным `satellite_id` (не автовыбор по `t_s` вне сетки).
+4. Рисуйте **только `analysis`**: `summary`, таблица `clients` (`path_before` / `path_after`, `delta_max_gap_s`), `vulnerabilities`, `mitigations`.
+5. Блок `compare.recommendation` **не** показывать как «лучший дизайн»: `better` всегда `"a"`. Это искусственный отказ, не вариант группировки.
+6. What-if создаёт **новый** project_id и run_id; исходный прогон не меняется — сохраните оба id.
+
+**Исследование параметра (ISL / орбита / elevation)**
+
+1. PATCH **не** меняет `environment`. Клонируйте `effective` на клиенте, поменяйте одно поле, `POST /api/projects`.
+2. Новый `POST .../runs`, затем `POST /api/compare` с исходным run.
+3. Пример: ISL 3000 → 2000 км как фикстура `04_link_range.json` (path падает при высокой видимости).
+
+Полные экраны, localStorage, fetch и формулы: **[frontend-ui.md](frontend-ui.md)**.
 
 **Сравнить полную группировку с очередью 1**
 
@@ -835,6 +861,7 @@ interface RouteRecord {
   path: string[];
   reason?: GapReason;
   hops?: number;
+  alt_count: number;
 }
 
 interface Run {
@@ -893,7 +920,7 @@ interface GetSnapshotResponse {
 interface ExportDocument {
   schema_version: "cosmo-A-result-1.0" | string;
   effective_scenario: Scenario;
-  routes: RouteRecord[];
+  routes: Omit<RouteRecord, "alt_count">[];
   metrics?: ClientMetrics[];
   summary?: string;
 }
@@ -1025,3 +1052,4 @@ interface WhatIfResponse {
 `GET /metrics` декодируйте как `ClientMetrics[]`.
 `POST /projects` и `GET/PATCH/reset/copy` — как `Project`.
 `POST /runs` — как `CreateRunResponse`, не как `Run`.
+`GET /runs` `routes[].alt_count` всегда число (в том числе `0`). Те же типы + fetch: [frontend-client.ts](frontend-client.ts).

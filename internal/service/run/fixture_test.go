@@ -151,6 +151,7 @@ func (s *FixtureSuite) assertFixtureGrid(rel string, opts fixtureOpts) []model.S
 				Path:     path,
 				Reason:   res.Reason,
 				Hops:     res.Hops,
+				AltCount: len(res.Alternatives),
 			})
 			visible[t][clientID] = clientVisible(sc, snap, clientID)
 		}

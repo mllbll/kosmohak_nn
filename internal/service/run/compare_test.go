@@ -67,6 +67,38 @@ func (s *ServiceSuite) TestCompareSuccess() {
 	s.Require().Contains(string(raw), `"max_gap_s_a":0`)
 }
 
+func (s *ServiceSuite) TestCompareSameGridDifferentISLAndFailures() {
+	var (
+		projectID = gofakeit.UUID()
+		runA      = testRun(projectID)
+		runB      = testRun(projectID)
+	)
+	runB.EffectiveScenario.Environment.ISLRangeKM = 2000
+	runB.EffectiveScenario.Failures = []model.Failure{{
+		SatelliteID: "S01",
+		StartS:      0,
+		EndS:        120,
+	}}
+	runB.Metrics = []model.ClientMetrics{
+		{ClientID: "C65", PathRatio: 0.5, VisibilityRatio: 0.6, MaxGapS: 120, MeetsTarget: false},
+	}
+
+	s.runRepository.On("Get", s.ctx, runA.ID).Return(runA, nil)
+	s.runRepository.On("Get", s.ctx, runB.ID).Return(runB, nil)
+
+	res, err := s.service.Compare(s.ctx, model.CompareRunsRequest{
+		RunAID: runA.ID,
+		RunBID: runB.ID,
+	})
+
+	s.Require().NoError(err)
+	s.Require().Contains(res.Config, "isl_range_km")
+	s.Require().Contains(res.Config, "failures")
+	s.Require().NotContains(res.Config, "horizon_s")
+	s.Require().NotContains(res.Config, "step_s")
+	s.Require().Equal("a", res.Recommendation.Better)
+}
+
 func (s *ServiceSuite) TestCompareRunIDsSuccess() {
 	var (
 		projectID = gofakeit.UUID()
@@ -127,6 +159,74 @@ func (s *ServiceSuite) TestCompareTie() {
 	s.Require().NotEmpty(res.Recommendation.Conditions)
 	s.Require().NotEmpty(res.Recommendation.Limitations)
 	s.Require().Contains(res.Recommendation.Conclusion, "нет единственного победителя")
+}
+
+func (s *ServiceSuite) TestCompareRejectsDifferentStepS() {
+	var (
+		projectID = gofakeit.UUID()
+		runA      = testRun(projectID)
+		runB      = testRun(projectID)
+	)
+	runB.EffectiveScenario.Environment.StepS = 60
+
+	s.runRepository.On("Get", s.ctx, runA.ID).Return(runA, nil)
+	s.runRepository.On("Get", s.ctx, runB.ID).Return(runB, nil)
+
+	res, err := s.service.Compare(s.ctx, model.CompareRunsRequest{
+		RunAID: runA.ID,
+		RunBID: runB.ID,
+	})
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Equal("invalid argument: runs have different time grids (horizon_s/step_s)", err.Error())
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestCompareRejectsDifferentHorizonS() {
+	var (
+		projectID = gofakeit.UUID()
+		runA      = testRun(projectID)
+		runB      = testRun(projectID)
+	)
+	runB.EffectiveScenario.Environment.HorizonS = 240
+
+	s.runRepository.On("Get", s.ctx, runA.ID).Return(runA, nil)
+	s.runRepository.On("Get", s.ctx, runB.ID).Return(runB, nil)
+
+	res, err := s.service.Compare(s.ctx, model.CompareRunsRequest{
+		RunAID: runA.ID,
+		RunBID: runB.ID,
+	})
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Equal("invalid argument: runs have different time grids (horizon_s/step_s)", err.Error())
+	s.Require().Empty(res)
+}
+
+func (s *ServiceSuite) TestCompareRunIDsRejectsDifferentTimeGrid() {
+	var (
+		projectID = gofakeit.UUID()
+		runA      = testRun(projectID)
+		runB      = testRun(projectID)
+		runC      = testRun(projectID)
+	)
+	runB.EffectiveScenario.Design.LaunchStage = 1
+	runC.EffectiveScenario.Environment.StepS = 60
+
+	s.runRepository.On("Get", s.ctx, runA.ID).Return(runA, nil)
+	s.runRepository.On("Get", s.ctx, runB.ID).Return(runB, nil)
+	s.runRepository.On("Get", s.ctx, runC.ID).Return(runC, nil)
+
+	res, err := s.service.Compare(s.ctx, model.CompareRunsRequest{
+		RunIDs: []string{runA.ID, runB.ID, runC.ID},
+	})
+
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, model.ErrInvalidArgument)
+	s.Require().Contains(err.Error(), "horizon_s/step_s")
+	s.Require().Empty(res)
 }
 
 func (s *ServiceSuite) TestCompareInvalidArgument() {

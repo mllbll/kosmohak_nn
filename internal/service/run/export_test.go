@@ -72,4 +72,5 @@ func (s *ServiceSuite) TestExportMarshalsEmptyPathAndGaps() {
 	s.Require().Contains(string(raw), `"gaps":[]`)
 	s.Require().NotContains(string(raw), `"path":null`)
 	s.Require().NotContains(string(raw), `"failures":null`)
+	s.Require().NotContains(string(raw), `"alt_count"`)
 }

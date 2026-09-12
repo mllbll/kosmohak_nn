@@ -3,6 +3,7 @@ package v1
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -51,6 +52,25 @@ func (s *APISuite) TestCreateInvalidArgument() {
 
 	s.Require().Equal(http.StatusBadRequest, rec.Code)
 	s.projectService.AssertNotCalled(s.T(), "Create")
+}
+
+func (s *APISuite) TestCreateValidationNamesField() {
+	var (
+		sc         = testScenario()
+		serviceErr = fmt.Errorf("%w: environment.altitude_km must be in [200, 1200]", model.ErrInvalidArgument)
+
+		createProjectRequest = model.CreateProjectRequest{
+			Scenario: sc,
+		}
+	)
+
+	s.projectService.On("Create", mock.Anything, createProjectRequest).Return(model.CreateProjectResponse{}, serviceErr)
+
+	rec, req := s.newRequest(http.MethodPost, "/api/projects", "", sc)
+	s.api.Create(rec, req)
+
+	s.Require().Equal(http.StatusBadRequest, rec.Code)
+	s.Require().Contains(rec.Body.String(), `"error":"invalid argument: environment.altitude_km must be in [200, 1200]"`)
 }
 
 func (s *APISuite) TestCreateError() {
