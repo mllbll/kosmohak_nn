@@ -4,6 +4,8 @@
 
 Целевой ориентир ТЗ: доступность сквозного пути **client → спутники → gateway ≥ 90%** для каждого наземного пункта. Наземные пункты не ретранслируют трафик.
 
+Контракт HTTP для фронтенда: [docs/frontend.md](docs/frontend.md).
+
 ## Слои
 
 ```
@@ -64,6 +66,8 @@ make test
 
 ## API
 
+Полный контракт для фронтенда (схемы, статусы, примеры, потоки UI, фикстуры, чего нет): **[docs/frontend.md](docs/frontend.md)**.
+
 | Метод | Путь |
 |---|---|
 | GET | `/health` |
@@ -80,13 +84,7 @@ make test
 | POST | `/api/runs/{id}/what-if` |
 | POST | `/api/compare` |
 
-`POST /api/projects` принимает `cosmo-A-1.0` или выгрузку `cosmo-A-result-1.0`. Идентификатор проекта всегда новый UUID, `meta.id` не используется.
-
-`PATCH` меняет `launch_stage`, `planes[].raan_deg` / `phase_deg`, `failures`, `gateway_outages`. Некорректный вход возвращает 400 с указанием поля.
-
-`POST /api/compare` сравнивает два прогона (`run_a` + `run_b`) или список `run_ids`. В ответе: `config_diff`, метрики по пунктам, mean hops, рекомендация с преимуществами, условиями цели 90% и ограничениями.
-
-Маршруты: BFS min hops. Причины разрыва: `no_visible_sat`, `no_gateway_contact`, `gateway_outage`, `isl_partition`. Выгрузка: `schema_version=cosmo-A-result-1.0`, `effective_scenario`, `routes[].{t_s,client_id,path,reason,hops}`, метрики с интервалами `gaps`. `POST /api/runs/{id}/what-if` сравнивает отказ с исходным прогоном, но не рекомендует run_b как рабочий конфиг.
+CORS `*`, авторизации нет. `POST /api/projects` принимает `cosmo-A-1.0` или выгрузку `cosmo-A-result-1.0`; `project.id` всегда новый UUID. Create/copy/run/what-if отвечают **201**. Ошибки: `{ "error": "..." }` и 400/404/422/500.
 
 ## Расчёт
 
